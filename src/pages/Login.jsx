@@ -1,17 +1,37 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, LogIn, Sparkles } from 'lucide-react';
+import { Mail, Lock, LogIn, Sparkles, Moon, Sun } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
+  // État local pour le mode sombre
+  const [isDark, setIsDark] = useState(false);
+
+  // Applique la classe "dark" au document HTML
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
 
   const handleLogin = (e) => {
     e.preventDefault();
-    // Simulation de connexion réussie et redirection vers le Dashboard
     navigate('/');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200 p-4 relative">
+      
+      {/* Bouton de bascule du thème en haut à droite */}
+      <button 
+        onClick={() => setIsDark(!isDark)}
+        className="absolute top-6 right-6 p-2.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors shadow-sm"
+      >
+        {isDark ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
+
       <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-lg border dark:border-gray-700 p-8 transition-colors">
         
         <div className="text-center mb-8">
