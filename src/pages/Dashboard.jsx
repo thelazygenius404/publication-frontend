@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart3, 
   CheckCircle2, 
@@ -8,7 +8,11 @@ import {
   Filter, 
   Download, 
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 
 const INITIAL_PUBLICATIONS = [
@@ -53,6 +57,41 @@ const INITIAL_PUBLICATIONS = [
     platform: 'WordPress',
     status: 'PENDING',
     scheduledDate: '2026-09-08 16:00',
+  },
+  {
+    id: 7,
+    title: 'Lancement du nouveau service Cloud privé',
+    platform: 'LinkedIn',
+    status: 'PUBLISHED',
+    scheduledDate: '2026-08-28 09:00',
+  },
+  {
+    id: 8,
+    title: 'Bonnes pratiques d’authentification avec JWT',
+    platform: 'WordPress',
+    status: 'PUBLISHED',
+    scheduledDate: '2026-08-25 15:00',
+  },
+  {
+    id: 9,
+    title: 'Publication test API LinkedIn v2',
+    platform: 'LinkedIn',
+    status: 'FAILED',
+    scheduledDate: '2026-08-22 17:45',
+  },
+  {
+    id: 10,
+    title: 'Retour d’expérience sur l’orchestrateur n8n',
+    platform: 'LinkedIn',
+    status: 'DRAFT',
+    scheduledDate: '-',
+  },
+  {
+    id: 11,
+    title: 'Analyse comparative des frameworks réactifs',
+    platform: 'WordPress',
+    status: 'PENDING',
+    scheduledDate: '2026-09-12 10:30',
   }
 ];
 
@@ -62,13 +101,22 @@ export default function Dashboard() {
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedPlatform, setSelectedPlatform] = useState('ALL');
 
-  // Stats calculation
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedStatus, selectedPlatform, itemsPerPage]);
+
+  // KPI calculations
   const totalCount = publications.length;
   const publishedCount = publications.filter((p) => p.status === 'PUBLISHED').length;
   const pendingCount = publications.filter((p) => p.status === 'PENDING').length;
   const failedCount = publications.filter((p) => p.status === 'FAILED').length;
 
-  // Search & Filter Logic
+  // Filtered dataset
   const filteredPublications = useMemo(() => {
     return publications.filter((item) => {
       const matchesSearch =
@@ -85,10 +133,17 @@ export default function Dashboard() {
     });
   }, [publications, searchQuery, selectedStatus, selectedPlatform]);
 
+  // Paginated dataset
+  const totalPages = Math.max(1, Math.ceil(filteredPublications.length / itemsPerPage));
+  const paginatedPublications = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredPublications.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredPublications, currentPage, itemsPerPage]);
+
   // CSV Export
   const handleExportCSV = () => {
     if (filteredPublications.length === 0) {
-      alert('Aucune donnée à exporter avec les filtres actuels.');
+      alert('Aucune donnée à exporter.');
       return;
     }
 
@@ -144,6 +199,9 @@ export default function Dashboard() {
       </span>
     );
   };
+
+  const startRecord = filteredPublications.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const endRecord = Math.min(currentPage * itemsPerPage, filteredPublications.length);
 
   return (
     <div className="space-y-6">
@@ -271,7 +329,7 @@ export default function Dashboard() {
               </select>
             </div>
 
-            {/* Reset Filters button if active */}
+            {/* Reset Filters */}
             {(searchQuery || selectedStatus !== 'ALL' || selectedPlatform !== 'ALL') && (
               <button
                 onClick={resetFilters}
@@ -292,11 +350,24 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Results indicator */}
-        <div className="text-xs text-slate-500 dark:text-slate-400 pt-1 flex items-center justify-between border-t border-slate-100 dark:border-slate-700/40">
+        {/* Results indicator & Items Per Page Selector */}
+        <div className="text-xs text-slate-500 dark:text-slate-400 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-700/40">
           <span>
-            Affichage de <strong>{filteredPublications.length}</strong> publication(s) sur <strong>{totalCount}</strong>
+            Affichage de <strong>{startRecord}</strong> à <strong>{endRecord}</strong> sur <strong>{filteredPublications.length}</strong> publication(s)
           </span>
+
+          <div className="flex items-center gap-2">
+            <span>Éléments par page :</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -321,8 +392,8 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {filteredPublications.length > 0 ? (
-                filteredPublications.map((item) => (
+              {paginatedPublications.length > 0 ? (
+                paginatedPublications.map((item) => (
                   <tr
                     key={item.id}
                     className="hover:bg-slate-50/75 dark:hover:bg-slate-700/30 transition-colors"
@@ -362,6 +433,79 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {filteredPublications.length > 0 && (
+          <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Page <strong>{currentPage}</strong> sur <strong>{totalPages}</strong>
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="Première page"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="Page précédente"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* Page Number Pills */}
+              <div className="flex items-center gap-1 mx-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((page, index, array) => {
+                    const prev = array[index - 1];
+                    return (
+                      <React.Fragment key={page}>
+                        {prev && page - prev > 1 && (
+                          <span className="px-1 text-xs text-slate-400">...</span>
+                        )}
+                        <button
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-7 h-7 text-xs font-medium rounded-lg transition-colors ${
+                            currentPage === page
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="Page suivante"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="Dernière page"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
