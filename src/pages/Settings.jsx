@@ -1,18 +1,15 @@
-import React, { useState } from 'react';
+import {
+  useState,
+} from 'react';
 import {
   Link2,
   Sparkles,
   Workflow,
   ShieldCheck,
   CheckCircle2,
-  AlertCircle,
   RefreshCw,
-  ExternalLink,
   Save,
   KeyRound,
-  Sliders,
-  Bell,
-  Trash2
 } from 'lucide-react';
 
 export default function Settings() {

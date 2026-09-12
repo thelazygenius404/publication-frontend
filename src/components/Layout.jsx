@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 // Ajout de useNavigate dans les imports
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, PenTool, Settings, LogOut, Moon, Sun } from 'lucide-react';
+import useAuth from '../auth/useAuth';
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate(); // Initialisation de la navigation
-  
+  const { logout } = useAuth();
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -19,10 +20,15 @@ export default function Layout() {
 
   // Fonction de déconnexion
   const handleLogout = () => {
-    // Plus tard, vous ajouterez ici le code pour supprimer le token JWT du localStorage
-    // localStorage.removeItem('token');
-    navigate('/login');
-  };
+  logout();
+
+  navigate(
+    '/login',
+    {
+      replace: true,
+    },
+  );
+};
 
   const menu = [
     { name: 'Tableau de bord', icon: LayoutDashboard, path: '/' },
