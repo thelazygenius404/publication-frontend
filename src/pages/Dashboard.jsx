@@ -1,462 +1,1556 @@
-import React, {
-  useState,
+import {
+  useEffect,
   useMemo,
+  useState,
 } from 'react';
-import { 
-  BarChart3, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  Search, 
-  Filter, 
-  Download, 
-  X,
-  FileSpreadsheet,
+
+import {
+  AlertCircle,
+  BarChart3,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Clock,
+  Download,
+  FileText,
+  Filter,
+  Globe2,
+  Link2,
+  LoaderCircle,
+  RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
 
-const INITIAL_PUBLICATIONS = [
-  {
-    id: 1,
-    title: 'Annonce de la nouvelle architecture MVP',
-    platform: 'LinkedIn',
-    status: 'PUBLISHED',
-    scheduledDate: '2026-09-04 10:00',
-  },
-  {
-    id: 2,
-    title: 'Tutoriel : Intégration React et Spring Boot',
-    platform: 'WordPress',
-    status: 'PENDING',
-    scheduledDate: '2026-09-05 14:30',
-  },
-  {
-    id: 3,
-    title: 'Brouillon - Stratégie de contenu Q4',
-    platform: 'LinkedIn',
-    status: 'DRAFT',
-    scheduledDate: '-',
-  },
-  {
-    id: 4,
-    title: 'Mise à jour des règles de sécurité et chiffrement AES',
-    platform: 'WordPress',
-    status: 'FAILED',
-    scheduledDate: '2026-09-03 09:15',
-  },
-  {
-    id: 5,
-    title: 'Présentation des flux automatisés avec n8n',
-    platform: 'LinkedIn',
-    status: 'PUBLISHED',
-    scheduledDate: '2026-09-01 11:00',
-  },
-  {
-    id: 6,
-    title: 'Guide complet sur Spring AI et LLM',
-    platform: 'WordPress',
-    status: 'PENDING',
-    scheduledDate: '2026-09-08 16:00',
-  },
-  {
-    id: 7,
-    title: 'Lancement du nouveau service Cloud privé',
-    platform: 'LinkedIn',
-    status: 'PUBLISHED',
-    scheduledDate: '2026-08-28 09:00',
-  },
-  {
-    id: 8,
-    title: 'Bonnes pratiques d’authentification avec JWT',
-    platform: 'WordPress',
-    status: 'PUBLISHED',
-    scheduledDate: '2026-08-25 15:00',
-  },
-  {
-    id: 9,
-    title: 'Publication test API LinkedIn v2',
-    platform: 'LinkedIn',
-    status: 'FAILED',
-    scheduledDate: '2026-08-22 17:45',
-  },
-  {
-    id: 10,
-    title: 'Retour d’expérience sur l’orchestrateur n8n',
-    platform: 'LinkedIn',
-    status: 'DRAFT',
-    scheduledDate: '-',
-  },
-  {
-    id: 11,
-    title: 'Analyse comparative des frameworks réactifs',
-    platform: 'WordPress',
-    status: 'PENDING',
-    scheduledDate: '2026-09-12 10:30',
-  }
+import {
+  getAccounts,
+} from '../api/accounts';
+
+import {
+  getContents,
+} from '../api/contents';
+
+import {
+  getPublications,
+} from '../api/publications';
+
+const PUBLICATION_STATUSES = [
+  'PENDING',
+  'SCHEDULED',
+  'PROCESSING',
+  'PUBLISHED',
+  'FAILED',
+  'CANCELLED',
 ];
 
+const STATUS_LABELS = {
+  PENDING: 'En attente',
+  SCHEDULED: 'Planifiée',
+  PROCESSING: 'En cours',
+  PUBLISHED: 'Publiée',
+  FAILED: 'Échec',
+  CANCELLED: 'Annulée',
+};
+
+const STATUS_STYLES = {
+  PENDING:
+    'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+
+  SCHEDULED:
+    'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+
+  PROCESSING:
+    'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+
+  PUBLISHED:
+    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+
+  FAILED:
+    'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+
+  CANCELLED:
+    'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+};
+
+function getErrorMessage(error) {
+  return (
+    error.response?.data?.message ||
+    error.message ||
+    'Impossible de charger le tableau de bord.'
+  );
+}
+
+function formatDate(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat(
+    'fr-FR',
+    {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    },
+  ).format(date);
+}
+
+function destinationLabel(
+  destination,
+) {
+  if (
+    destination ===
+    'LINKEDIN'
+  ) {
+    return 'LinkedIn';
+  }
+
+  if (
+    destination ===
+    'WORDPRESS'
+  ) {
+    return 'WordPress';
+  }
+
+  return destination || '—';
+}
+
+function connectionLabel(
+  account,
+) {
+  if (!account) {
+    return 'Indisponible';
+  }
+
+  if (
+    account.status ===
+    'EXPIRED'
+  ) {
+    return 'Expiré';
+  }
+
+  if (account.connected) {
+    return 'Connecté';
+  }
+
+  return 'Non connecté';
+}
+
+function AccountIndicator({
+  name,
+  account,
+  icon: Icon,
+}) {
+  const connected =
+    account?.connected;
+
+  const expired =
+    account?.status ===
+    'EXPIRED';
+
+  return (
+    <div
+      className="
+        flex
+        items-center
+        justify-between
+        gap-4
+        rounded-xl
+        border
+        border-slate-200
+        dark:border-slate-700
+        bg-slate-50
+        dark:bg-slate-900/50
+        px-4
+        py-3
+      "
+    >
+      <div className="
+        flex
+        items-center
+        gap-3
+        min-w-0
+      ">
+        <div className="
+          flex
+          h-9
+          w-9
+          shrink-0
+          items-center
+          justify-center
+          rounded-lg
+          bg-white
+          dark:bg-slate-800
+          border
+          border-slate-200
+          dark:border-slate-700
+        ">
+          <Icon
+            size={18}
+          />
+        </div>
+
+        <div className="min-w-0">
+          <p className="
+            text-sm
+            font-semibold
+            text-slate-800
+            dark:text-white
+          ">
+            {name}
+          </p>
+
+          {account?.siteUrl && (
+            <p className="
+              text-xs
+              text-slate-500
+              dark:text-slate-400
+              truncate
+            ">
+              {account.siteUrl}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <span
+        className={`
+          shrink-0
+          rounded-full
+          border
+          px-2.5
+          py-1
+          text-xs
+          font-semibold
+          ${
+            connected
+              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
+              : expired
+                ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400'
+                : 'bg-slate-500/10 text-slate-600 border-slate-500/20 dark:text-slate-400'
+          }
+        `}
+      >
+        {connectionLabel(
+          account,
+        )}
+      </span>
+    </div>
+  );
+}
+
 export default function Dashboard() {
-  const [publications] = useState(INITIAL_PUBLICATIONS);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('ALL');
-  const [selectedPlatform, setSelectedPlatform] = useState('ALL');
+  const [
+    publications,
+    setPublications,
+  ] = useState([]);
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [
+    contents,
+    setContents,
+  ] = useState([]);
 
-  
+  const [
+    accounts,
+    setAccounts,
+  ] = useState(null);
 
-  // KPI calculations
-  const totalCount = publications.length;
-  const publishedCount = publications.filter((p) => p.status === 'PUBLISHED').length;
-  const pendingCount = publications.filter((p) => p.status === 'PENDING').length;
-  const failedCount = publications.filter((p) => p.status === 'FAILED').length;
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
 
-  // Filtered dataset
-  const filteredPublications = useMemo(() => {
-    return publications.filter((item) => {
-      const matchesSearch =
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.platform.toLowerCase().includes(searchQuery.toLowerCase());
+  const [
+    error,
+    setError,
+  ] = useState('');
 
-      const matchesStatus =
-        selectedStatus === 'ALL' || item.status === selectedStatus;
+  const [
+    reloadKey,
+    setReloadKey,
+  ] = useState(0);
 
-      const matchesPlatform =
-        selectedPlatform === 'ALL' || item.platform.toLowerCase() === selectedPlatform.toLowerCase();
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState('');
 
-      return matchesSearch && matchesStatus && matchesPlatform;
-    });
-  }, [publications, searchQuery, selectedStatus, selectedPlatform]);
+  const [
+    selectedStatus,
+    setSelectedStatus,
+  ] = useState('ALL');
 
-  // Paginated dataset
-  const totalPages = Math.max(1, Math.ceil(filteredPublications.length / itemsPerPage));
-  const paginatedPublications = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredPublications.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredPublications, currentPage, itemsPerPage]);
+  const [
+    selectedDestination,
+    setSelectedDestination,
+  ] = useState('ALL');
 
-  // CSV Export
-  const handleExportCSV = () => {
-    if (filteredPublications.length === 0) {
-      alert('Aucune donnée à exporter.');
-      return;
-    }
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
 
-    const headers = ['ID', 'Titre', 'Plateforme', 'Statut', 'Date Prevue'];
-    const csvRows = [
-      headers.join(';'),
-      ...filteredPublications.map((item) =>
+  const [
+    itemsPerPage,
+    setItemsPerPage,
+  ] = useState(5);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    Promise.all([
+      getPublications(),
+      getContents(),
+      getAccounts(),
+    ])
+      .then(
+        ([
+          publicationsData,
+          contentsData,
+          accountsData,
+        ]) => {
+          if (cancelled) {
+            return;
+          }
+
+          setPublications(
+            Array.isArray(
+              publicationsData,
+            )
+              ? publicationsData
+              : [],
+          );
+
+          setContents(
+            Array.isArray(
+              contentsData,
+            )
+              ? contentsData
+              : [],
+          );
+
+          setAccounts(
+            accountsData,
+          );
+
+          setError('');
+        },
+      )
+      .catch(
+        (exception) => {
+          if (cancelled) {
+            return;
+          }
+
+          setError(
+            getErrorMessage(
+              exception,
+            ),
+          );
+        },
+      )
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const publishedCount =
+    publications.filter(
+      (publication) =>
+        publication.status ===
+        'PUBLISHED',
+    ).length;
+
+  const activeCount =
+    publications.filter(
+      (publication) =>
         [
-          item.id,
-          `"${item.title.replace(/"/g, '""')}"`,
-          item.platform,
-          item.status,
-          `"${item.scheduledDate}"`,
-        ].join(';')
-      ),
-    ];
+          'PENDING',
+          'SCHEDULED',
+          'PROCESSING',
+        ].includes(
+          publication.status,
+        ),
+    ).length;
 
-    const blob = new Blob(['\uFEFF' + csvRows.join('\n')], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute(
-      'download',
-      `publications_export_${new Date().toISOString().slice(0, 10)}.csv`
+  const failedCount =
+    publications.filter(
+      (publication) =>
+        publication.status ===
+        'FAILED',
+    ).length;
+
+  const draftCount =
+    contents.filter(
+      (content) =>
+        content.status ===
+        'DRAFT',
+    ).length;
+
+  const readyCount =
+    contents.filter(
+      (content) =>
+        content.status ===
+        'READY',
+    ).length;
+
+  const filteredPublications =
+    useMemo(() => {
+      const normalizedSearch =
+        searchQuery
+          .trim()
+          .toLowerCase();
+
+      return publications.filter(
+        (publication) => {
+          const matchesSearch =
+            !normalizedSearch ||
+            publication.title
+              ?.toLowerCase()
+              .includes(
+                normalizedSearch,
+              ) ||
+            publication.destination
+              ?.toLowerCase()
+              .includes(
+                normalizedSearch,
+              ) ||
+            publication.status
+              ?.toLowerCase()
+              .includes(
+                normalizedSearch,
+              );
+
+          const matchesStatus =
+            selectedStatus ===
+              'ALL' ||
+            publication.status ===
+              selectedStatus;
+
+          const matchesDestination =
+            selectedDestination ===
+              'ALL' ||
+            publication.destination ===
+              selectedDestination;
+
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesDestination
+          );
+        },
+      );
+    }, [
+      publications,
+      searchQuery,
+      selectedStatus,
+      selectedDestination,
+    ]);
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredPublications.length /
+          itemsPerPage,
+      ),
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+  const displayedPage =
+    Math.min(
+      currentPage,
+      totalPages,
+    );
+
+  const paginatedPublications =
+    useMemo(() => {
+      const startIndex =
+        (displayedPage - 1) *
+        itemsPerPage;
+
+      return filteredPublications.slice(
+        startIndex,
+        startIndex +
+          itemsPerPage,
+      );
+    }, [
+      filteredPublications,
+      displayedPage,
+      itemsPerPage,
+    ]);
+
+  const startRecord =
+    filteredPublications.length ===
+    0
+      ? 0
+      : (displayedPage - 1) *
+          itemsPerPage +
+        1;
+
+  const endRecord =
+    Math.min(
+      displayedPage *
+        itemsPerPage,
+      filteredPublications.length,
+    );
+
+  const handleRetry = () => {
+    setError('');
+    setIsLoading(true);
+
+    setReloadKey(
+      (value) =>
+        value + 1,
+    );
   };
 
   const resetFilters = () => {
-  setSearchQuery('');
-  setSelectedStatus('ALL');
-  setSelectedPlatform('ALL');
-  setCurrentPage(1);
-};
+    setSearchQuery('');
+    setSelectedStatus('ALL');
+    setSelectedDestination(
+      'ALL',
+    );
+    setCurrentPage(1);
+  };
 
-  const getStatusBadge = (status) => {
-    const config = {
-      PUBLISHED: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-      PENDING: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-      DRAFT: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
-      FAILED: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-    };
-    return (
-      <span
-        className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${
-          config[status] || 'bg-slate-100 text-slate-700'
-        }`}
-      >
-        {status}
-      </span>
+  const handleExportCSV = () => {
+    if (
+      filteredPublications.length ===
+      0
+    ) {
+      return;
+    }
+
+    const headers = [
+      'ID',
+      'Contenu',
+      'Titre',
+      'Destination',
+      'Statut',
+      'Planifiée',
+      'Publiée',
+      'External ID',
+      'Erreur',
+    ];
+
+    const rows =
+      filteredPublications.map(
+        (publication) => [
+          publication.id,
+          publication.contentId,
+          publication.title,
+          publication.destination,
+          publication.status,
+          publication.scheduledAt ||
+            '',
+          publication.publishedAt ||
+            '',
+          publication.externalId ||
+            '',
+          publication.errorMessage ||
+            '',
+        ],
+      );
+
+    const escapeCsv = (
+      value,
+    ) =>
+      `"${String(
+        value ?? '',
+      ).replace(
+        /"/g,
+        '""',
+      )}"`;
+
+    const csv = [
+      headers
+        .map(escapeCsv)
+        .join(';'),
+
+      ...rows.map(
+        (row) =>
+          row
+            .map(escapeCsv)
+            .join(';'),
+      ),
+    ].join('\n');
+
+    const blob =
+      new Blob(
+        [
+          '\uFEFF',
+          csv,
+        ],
+        {
+          type:
+            'text/csv;charset=utf-8;',
+        },
+      );
+
+    const url =
+      URL.createObjectURL(
+        blob,
+      );
+
+    const link =
+      document.createElement(
+        'a',
+      );
+
+    link.href = url;
+
+    link.download =
+      `publications_${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+
+    document.body.appendChild(
+      link,
+    );
+
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(
+      url,
     );
   };
 
-  const startRecord = filteredPublications.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const endRecord = Math.min(currentPage * itemsPerPage, filteredPublications.length);
+  if (isLoading) {
+    return (
+      <div className="
+        min-h-[60vh]
+        flex
+        items-center
+        justify-center
+      ">
+        <div className="
+          flex
+          flex-col
+          items-center
+          gap-3
+          text-slate-500
+          dark:text-slate-400
+        ">
+          <LoaderCircle
+            className="
+              h-8
+              w-8
+              animate-spin
+              text-indigo-600
+            "
+          />
+
+          <p className="text-sm">
+            Chargement du
+            tableau de bord...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
-          Tableau de bord
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Suivi, planification et gestion de l'historique des publications.
-        </p>
+      <div className="
+        flex
+        flex-col
+        gap-3
+        sm:flex-row
+        sm:items-center
+        sm:justify-between
+      ">
+        <div>
+          <h1 className="
+            text-2xl
+            font-bold
+            text-slate-800
+            dark:text-white
+          ">
+            Tableau de bord
+          </h1>
+
+          <p className="
+            mt-1
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+          ">
+            Données synchronisées
+            avec Publication API.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="
+            inline-flex
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border
+            border-slate-200
+            dark:border-slate-700
+            bg-white
+            dark:bg-slate-800
+            px-4
+            py-2.5
+            text-sm
+            font-medium
+            text-slate-700
+            dark:text-slate-200
+            hover:bg-slate-50
+            dark:hover:bg-slate-700
+            transition-colors
+          "
+        >
+          <RefreshCw
+            size={16}
+          />
+          Actualiser
+        </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Total
-            </p>
-            <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
-              {totalCount}
-            </h3>
-          </div>
-          <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-xl">
-            <BarChart3 className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Publiés
-            </p>
-            <h3 className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-              {publishedCount}
-            </h3>
-          </div>
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              En attente
-            </p>
-            <h3 className="text-3xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">
-              {pendingCount}
-            </h3>
-          </div>
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-xl">
-            <Clock className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Échoués
-            </p>
-            <h3 className="text-3xl font-extrabold text-rose-600 dark:text-rose-400 mt-1">
-              {failedCount}
-            </h3>
-          </div>
-          <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-        </div>
-      </div>
-
-      {/* Control Bar: Search, Filters & Export */}
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-3">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Rechercher par titre, mot-clé..."
-              value={searchQuery}
-              onChange={(e) => {
-  setSearchQuery(
-    e.target.value,
-  );
-
-  setCurrentPage(1);
-}}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+      {error && (
+        <div
+          role="alert"
+          className="
+            flex
+            items-start
+            justify-between
+            gap-4
+            rounded-xl
+            border
+            border-rose-200
+            dark:border-rose-900
+            bg-rose-50
+            dark:bg-rose-950/30
+            px-4
+            py-3
+          "
+        >
+          <div className="
+            flex
+            items-start
+            gap-3
+          ">
+            <AlertCircle
+              className="
+                mt-0.5
+                h-5
+                w-5
+                shrink-0
+                text-rose-600
+              "
             />
-            {searchQuery && (
-              <button
-                onClick={() => {
-  setSearchQuery('');
-  setCurrentPage(1);
-}}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
 
-          {/* Filters & Export button group */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Status Filter */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <select
-                value={selectedStatus}
-                onChange={(e) => {
-  setSelectedStatus(
-    e.target.value,
-  );
+            <div>
+              <p className="
+                text-sm
+                font-semibold
+                text-rose-800
+                dark:text-rose-300
+              ">
+                Erreur de chargement
+              </p>
 
-  setCurrentPage(1);
-}}
-                className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
-              >
-                <option value="ALL">Tous les statuts</option>
-                <option value="PUBLISHED">PUBLISHED</option>
-                <option value="PENDING">PENDING</option>
-                <option value="DRAFT">DRAFT</option>
-                <option value="FAILED">FAILED</option>
-              </select>
+              <p className="
+                mt-1
+                text-sm
+                text-rose-700
+                dark:text-rose-400
+              ">
+                {error}
+              </p>
             </div>
-
-            {/* Platform Filter */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
-              <select
-                value={selectedPlatform}
-                onChange={(e) => {
-  setSelectedPlatform(
-    e.target.value,
-  );
-
-  setCurrentPage(1);
-}}
-                className="bg-transparent text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
-              >
-                <option value="ALL">Toutes les plateformes</option>
-                <option value="LinkedIn">LinkedIn</option>
-                <option value="WordPress">WordPress</option>
-              </select>
-            </div>
-
-            {/* Reset Filters */}
-            {(searchQuery || selectedStatus !== 'ALL' || selectedPlatform !== 'ALL') && (
-              <button
-                onClick={resetFilters}
-                className="px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-colors"
-              >
-                Réinitialiser
-              </button>
-            )}
-
-            {/* Export CSV Button */}
-            <button
-              onClick={handleExportCSV}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm hover:shadow transition-all"
-            >
-              <Download className="w-4 h-4" />
-              <span>Exporter CSV</span>
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="
+              text-sm
+              font-semibold
+              text-rose-700
+              dark:text-rose-300
+              hover:underline
+            "
+          >
+            Réessayer
+          </button>
         </div>
+      )}
 
-        {/* Results indicator & Items Per Page Selector */}
-        <div className="text-xs text-slate-500 dark:text-slate-400 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-700/40">
-          <span>
-            Affichage de <strong>{startRecord}</strong> à <strong>{endRecord}</strong> sur <strong>{filteredPublications.length}</strong> publication(s)
-          </span>
+      <div className="
+        grid
+        grid-cols-1
+        gap-4
+        sm:grid-cols-2
+        xl:grid-cols-4
+      ">
+        <KpiCard
+          label="Publications"
+          value={
+            publications.length
+          }
+          icon={BarChart3}
+          variant="indigo"
+        />
 
-          <div className="flex items-center gap-2">
-            <span>Éléments par page :</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-  setItemsPerPage(
-    Number(
-      e.target.value,
-    ),
-  );
+        <KpiCard
+          label="Publiées"
+          value={
+            publishedCount
+          }
+          icon={
+            CheckCircle2
+          }
+          variant="emerald"
+        />
 
-  setCurrentPage(1);
-}}
-              className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-            </select>
-          </div>
-        </div>
+        <KpiCard
+          label="En cours"
+          value={
+            activeCount
+          }
+          icon={Clock}
+          variant="blue"
+        />
+
+        <KpiCard
+          label="Échouées"
+          value={
+            failedCount
+          }
+          icon={
+            AlertCircle
+          }
+          variant="rose"
+        />
       </div>
 
-      {/* Publications Table */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40">
-                <th className="py-3.5 px-5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Titre
+      <div className="
+        grid
+        grid-cols-1
+        gap-4
+        xl:grid-cols-2
+      ">
+        <section className="
+          rounded-2xl
+          border
+          border-slate-200/80
+          dark:border-slate-700/60
+          bg-white
+          dark:bg-slate-800
+          p-5
+          shadow-sm
+        ">
+          <div className="
+            mb-4
+            flex
+            items-center
+            gap-3
+          ">
+            <div className="
+              rounded-xl
+              bg-indigo-50
+              dark:bg-indigo-950/40
+              p-2.5
+              text-indigo-600
+              dark:text-indigo-400
+            ">
+              <FileText
+                size={20}
+              />
+            </div>
+
+            <div>
+              <h2 className="
+                font-semibold
+                text-slate-900
+                dark:text-white
+              ">
+                Contenus
+              </h2>
+
+              <p className="
+                text-xs
+                text-slate-500
+                dark:text-slate-400
+              ">
+                État de préparation
+                des contenus
+              </p>
+            </div>
+          </div>
+
+          <div className="
+            grid
+            grid-cols-3
+            gap-3
+          ">
+            <ContentMetric
+              label="Total"
+              value={
+                contents.length
+              }
+            />
+
+            <ContentMetric
+              label="Brouillons"
+              value={
+                draftCount
+              }
+            />
+
+            <ContentMetric
+              label="Prêts"
+              value={
+                readyCount
+              }
+            />
+          </div>
+        </section>
+
+        <section className="
+          rounded-2xl
+          border
+          border-slate-200/80
+          dark:border-slate-700/60
+          bg-white
+          dark:bg-slate-800
+          p-5
+          shadow-sm
+        ">
+          <div className="
+            mb-4
+            flex
+            items-center
+            gap-3
+          ">
+            <div className="
+              rounded-xl
+              bg-indigo-50
+              dark:bg-indigo-950/40
+              p-2.5
+              text-indigo-600
+              dark:text-indigo-400
+            ">
+              <Link2
+                size={20}
+              />
+            </div>
+
+            <div>
+              <h2 className="
+                font-semibold
+                text-slate-900
+                dark:text-white
+              ">
+                Comptes connectés
+              </h2>
+
+              <p className="
+                text-xs
+                text-slate-500
+                dark:text-slate-400
+              ">
+                État des intégrations
+              </p>
+            </div>
+          </div>
+
+          <div className="
+            grid
+            gap-3
+            sm:grid-cols-2
+          ">
+            <AccountIndicator
+              name="LinkedIn"
+              account={
+                accounts
+                  ?.linkedin
+              }
+              icon={Link2}
+            />
+
+            <AccountIndicator
+              name="WordPress"
+              account={
+                accounts
+                  ?.wordpress
+              }
+              icon={Globe2}
+            />
+          </div>
+        </section>
+      </div>
+
+      <section className="
+        rounded-2xl
+        border
+        border-slate-200/80
+        dark:border-slate-700/60
+        bg-white
+        dark:bg-slate-800
+        shadow-sm
+        overflow-hidden
+      ">
+        <div className="
+          p-4
+          space-y-3
+        ">
+          <div className="
+            flex
+            flex-col
+            gap-3
+            lg:flex-row
+            lg:items-center
+            lg:justify-between
+          ">
+            <div className="
+              relative
+              flex-1
+            ">
+              <Search
+                className="
+                  absolute
+                  left-3.5
+                  top-1/2
+                  h-4
+                  w-4
+                  -translate-y-1/2
+                  text-slate-400
+                "
+              />
+
+              <input
+                type="text"
+                value={
+                  searchQuery
+                }
+                placeholder="Rechercher une publication..."
+                onChange={(
+                  event,
+                ) => {
+                  setSearchQuery(
+                    event.target
+                      .value,
+                  );
+
+                  setCurrentPage(
+                    1,
+                  );
+                }}
+                className="
+                  w-full
+                  rounded-xl
+                  border
+                  border-slate-200
+                  dark:border-slate-700
+                  bg-slate-50
+                  dark:bg-slate-900
+                  py-2.5
+                  pl-10
+                  pr-10
+                  text-sm
+                  text-slate-800
+                  dark:text-white
+                  outline-none
+                  focus:border-indigo-500
+                  focus:ring-2
+                  focus:ring-indigo-500/20
+                "
+              />
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery(
+                      '',
+                    );
+
+                    setCurrentPage(
+                      1,
+                    );
+                  }}
+                  className="
+                    absolute
+                    right-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-slate-400
+                    hover:text-slate-600
+                    dark:hover:text-slate-200
+                  "
+                >
+                  <X
+                    size={16}
+                  />
+                </button>
+              )}
+            </div>
+
+            <div className="
+              flex
+              flex-wrap
+              items-center
+              gap-2
+            ">
+              <div className="
+                flex
+                items-center
+                gap-2
+                rounded-xl
+                border
+                border-slate-200
+                dark:border-slate-700
+                bg-slate-50
+                dark:bg-slate-900
+                px-3
+                py-2
+              ">
+                <Filter
+                  size={14}
+                  className="
+                    text-slate-400
+                  "
+                />
+
+                <select
+                  value={
+                    selectedStatus
+                  }
+                  onChange={(
+                    event,
+                  ) => {
+                    setSelectedStatus(
+                      event.target
+                        .value,
+                    );
+
+                    setCurrentPage(
+                      1,
+                    );
+                  }}
+                  className="
+                    bg-transparent
+                    text-xs
+                    font-medium
+                    text-slate-700
+                    dark:text-slate-300
+                    outline-none
+                  "
+                >
+                  <option value="ALL">
+                    Tous les statuts
+                  </option>
+
+                  {PUBLICATION_STATUSES.map(
+                    (status) => (
+                      <option
+                        key={
+                          status
+                        }
+                        value={
+                          status
+                        }
+                      >
+                        {
+                          STATUS_LABELS[
+                            status
+                          ]
+                        }
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
+              <select
+                value={
+                  selectedDestination
+                }
+                onChange={(
+                  event,
+                ) => {
+                  setSelectedDestination(
+                    event.target
+                      .value,
+                  );
+
+                  setCurrentPage(
+                    1,
+                  );
+                }}
+                className="
+                  rounded-xl
+                  border
+                  border-slate-200
+                  dark:border-slate-700
+                  bg-slate-50
+                  dark:bg-slate-900
+                  px-3
+                  py-2
+                  text-xs
+                  font-medium
+                  text-slate-700
+                  dark:text-slate-300
+                  outline-none
+                "
+              >
+                <option value="ALL">
+                  Toutes les plateformes
+                </option>
+
+                <option value="LINKEDIN">
+                  LinkedIn
+                </option>
+
+                <option value="WORDPRESS">
+                  WordPress
+                </option>
+              </select>
+
+              {(searchQuery ||
+                selectedStatus !==
+                  'ALL' ||
+                selectedDestination !==
+                  'ALL') && (
+                <button
+                  type="button"
+                  onClick={
+                    resetFilters
+                  }
+                  className="
+                    rounded-xl
+                    px-3
+                    py-2
+                    text-xs
+                    font-medium
+                    text-rose-600
+                    hover:bg-rose-50
+                    dark:hover:bg-rose-950/30
+                  "
+                >
+                  Réinitialiser
+                </button>
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  filteredPublications.length ===
+                  0
+                }
+                onClick={
+                  handleExportCSV
+                }
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  rounded-xl
+                  bg-indigo-600
+                  px-4
+                  py-2.5
+                  text-xs
+                  font-semibold
+                  text-white
+                  transition
+                  hover:bg-indigo-700
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                "
+              >
+                <Download
+                  size={16}
+                />
+                Exporter CSV
+              </button>
+            </div>
+          </div>
+
+          <div className="
+            flex
+            flex-col
+            gap-2
+            border-t
+            border-slate-100
+            dark:border-slate-700/40
+            pt-3
+            text-xs
+            text-slate-500
+            dark:text-slate-400
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          ">
+            <span>
+              Affichage de{' '}
+              <strong>
+                {startRecord}
+              </strong>{' '}
+              à{' '}
+              <strong>
+                {endRecord}
+              </strong>{' '}
+              sur{' '}
+              <strong>
+                {
+                  filteredPublications.length
+                }
+              </strong>
+            </span>
+
+            <div className="
+              flex
+              items-center
+              gap-2
+            ">
+              <span>
+                Éléments par page :
+              </span>
+
+              <select
+                value={
+                  itemsPerPage
+                }
+                onChange={(
+                  event,
+                ) => {
+                  setItemsPerPage(
+                    Number(
+                      event.target
+                        .value,
+                    ),
+                  );
+
+                  setCurrentPage(
+                    1,
+                  );
+                }}
+                className="
+                  rounded-lg
+                  border
+                  border-slate-200
+                  dark:border-slate-700
+                  bg-slate-50
+                  dark:bg-slate-900
+                  px-2
+                  py-1
+                  outline-none
+                "
+              >
+                <option value={5}>
+                  5
+                </option>
+                <option value={10}>
+                  10
+                </option>
+                <option value={20}>
+                  20
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="
+          overflow-x-auto
+          border-t
+          border-slate-200
+          dark:border-slate-700
+        ">
+          <table className="
+            min-w-full
+            text-left
+            text-sm
+          ">
+            <thead className="
+              bg-slate-50
+              dark:bg-slate-900/70
+              text-xs
+              uppercase
+              tracking-wide
+              text-slate-500
+              dark:text-slate-400
+            ">
+              <tr>
+                <th className="px-5 py-3">
+                  Publication
                 </th>
-                <th className="py-3.5 px-5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Plateforme
+
+                <th className="px-5 py-3">
+                  Destination
                 </th>
-                <th className="py-3.5 px-5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+
+                <th className="px-5 py-3">
                   Statut
                 </th>
-                <th className="py-3.5 px-5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Date prévue
+
+                <th className="px-5 py-3">
+                  Planifiée
+                </th>
+
+                <th className="px-5 py-3">
+                  Publiée
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              {paginatedPublications.length > 0 ? (
-                paginatedPublications.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-slate-50/75 dark:hover:bg-slate-700/30 transition-colors"
-                  >
-                    <td className="py-4 px-5 text-sm font-medium text-slate-800 dark:text-slate-100">
-                      {item.title}
-                    </td>
-                    <td className="py-4 px-5 text-sm text-slate-600 dark:text-slate-300">
-                      <span className="inline-flex items-center gap-1.5">
+
+            <tbody className="
+              divide-y
+              divide-slate-100
+              dark:divide-slate-700
+            ">
+              {paginatedPublications.length >
+              0 ? (
+                paginatedPublications.map(
+                  (
+                    publication,
+                  ) => (
+                    <tr
+                      key={
+                        publication.id
+                      }
+                      className="
+                        hover:bg-slate-50/70
+                        dark:hover:bg-slate-700/30
+                      "
+                    >
+                      <td className="
+                        px-5
+                        py-4
+                      ">
+                        <p className="
+                          max-w-md
+                          font-medium
+                          text-slate-900
+                          dark:text-white
+                        ">
+                          {
+                            publication.title
+                          }
+                        </p>
+
+                        <p className="
+                          mt-1
+                          text-xs
+                          text-slate-400
+                        ">
+                          #{publication.id}
+                          {' · '}
+                          contenu #
+                          {
+                            publication.contentId
+                          }
+                        </p>
+                      </td>
+
+                      <td className="
+                        px-5
+                        py-4
+                        text-slate-600
+                        dark:text-slate-300
+                      ">
+                        {destinationLabel(
+                          publication.destination,
+                        )}
+                      </td>
+
+                      <td className="
+                        px-5
+                        py-4
+                      ">
                         <span
-                          className={`w-2 h-2 rounded-full ${
-                            item.platform === 'LinkedIn'
-                              ? 'bg-[#0077B5]'
-                              : 'bg-[#21759B]'
-                          }`}
-                        />
-                        {item.platform}
-                      </span>
-                    </td>
-                    <td className="py-4 px-5">{getStatusBadge(item.status)}</td>
-                    <td className="py-4 px-5 text-sm text-slate-500 dark:text-slate-400 font-mono text-xs">
-                      {item.scheduledDate}
-                    </td>
-                  </tr>
-                ))
+                          className={`
+                            inline-flex
+                            rounded-full
+                            border
+                            px-2.5
+                            py-1
+                            text-xs
+                            font-semibold
+                            ${
+                              STATUS_STYLES[
+                                publication
+                                  .status
+                              ] ||
+                              'bg-slate-100 text-slate-700 border-slate-200'
+                            }
+                          `}
+                        >
+                          {STATUS_LABELS[
+                            publication
+                              .status
+                          ] ||
+                            publication.status}
+                        </span>
+                      </td>
+
+                      <td className="
+                        whitespace-nowrap
+                        px-5
+                        py-4
+                        text-slate-600
+                        dark:text-slate-300
+                      ">
+                        {formatDate(
+                          publication.scheduledAt,
+                        )}
+                      </td>
+
+                      <td className="
+                        whitespace-nowrap
+                        px-5
+                        py-4
+                        text-slate-600
+                        dark:text-slate-300
+                      ">
+                        {formatDate(
+                          publication.publishedAt,
+                        )}
+                      </td>
+                    </tr>
+                  ),
+                )
               ) : (
                 <tr>
                   <td
-                    colSpan="4"
-                    className="py-12 text-center text-slate-400 dark:text-slate-500 text-sm"
+                    colSpan={5}
+                    className="
+                      px-6
+                      py-14
+                      text-center
+                      text-slate-500
+                      dark:text-slate-400
+                    "
                   >
-                    <FileSpreadsheet className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    Aucune publication ne correspond à vos critères de recherche.
+                    Aucune publication
+                    ne correspond aux
+                    critères.
                   </td>
                 </tr>
               )}
@@ -464,79 +1558,281 @@ export default function Dashboard() {
           </table>
         </div>
 
-        {/* Pagination Footer */}
-        {filteredPublications.length > 0 && (
-          <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between">
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              Page <strong>{currentPage}</strong> sur <strong>{totalPages}</strong>
-            </span>
+        <div className="
+          flex
+          items-center
+          justify-between
+          border-t
+          border-slate-200
+          dark:border-slate-700
+          px-4
+          py-3
+        ">
+          <p className="
+            text-xs
+            text-slate-500
+            dark:text-slate-400
+          ">
+            Page{' '}
+            <strong>
+              {displayedPage}
+            </strong>{' '}
+            sur{' '}
+            <strong>
+              {totalPages}
+            </strong>
+          </p>
 
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                title="Première page"
-              >
-                <ChevronsLeft className="w-4 h-4" />
-              </button>
+          <div className="
+            flex
+            items-center
+            gap-1
+          ">
+            <PaginationButton
+              label="Première page"
+              disabled={
+                displayedPage === 1
+              }
+              onClick={() =>
+                setCurrentPage(
+                  1,
+                )
+              }
+            >
+              <ChevronsLeft
+                size={16}
+              />
+            </PaginationButton>
 
-              <button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                title="Page précédente"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+            <PaginationButton
+              label="Page précédente"
+              disabled={
+                displayedPage === 1
+              }
+              onClick={() =>
+                setCurrentPage(
+                  Math.max(
+                    1,
+                    displayedPage -
+                      1,
+                  ),
+                )
+              }
+            >
+              <ChevronLeft
+                size={16}
+              />
+            </PaginationButton>
 
-              {/* Page Number Pills */}
-              <div className="flex items-center gap-1 mx-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((p) => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                  .map((page, index, array) => {
-                    const prev = array[index - 1];
-                    return (
-                      <React.Fragment key={page}>
-                        {prev && page - prev > 1 && (
-                          <span className="px-1 text-xs text-slate-400">...</span>
-                        )}
-                        <button
-                          onClick={() => setCurrentPage(page)}
-                          className={`w-7 h-7 text-xs font-medium rounded-lg transition-colors ${
-                            currentPage === page
-                              ? 'bg-indigo-600 text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-              </div>
+            <PaginationButton
+              label="Page suivante"
+              disabled={
+                displayedPage ===
+                totalPages
+              }
+              onClick={() =>
+                setCurrentPage(
+                  Math.min(
+                    totalPages,
+                    displayedPage +
+                      1,
+                  ),
+                )
+              }
+            >
+              <ChevronRight
+                size={16}
+              />
+            </PaginationButton>
 
-              <button
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                title="Page suivante"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                title="Dernière page"
-              >
-                <ChevronsRight className="w-4 h-4" />
-              </button>
-            </div>
+            <PaginationButton
+              label="Dernière page"
+              disabled={
+                displayedPage ===
+                totalPages
+              }
+              onClick={() =>
+                setCurrentPage(
+                  totalPages,
+                )
+              }
+            >
+              <ChevronsRight
+                size={16}
+              />
+            </PaginationButton>
           </div>
-        )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  variant,
+}) {
+  const variants = {
+    indigo: {
+      value:
+        'text-slate-900 dark:text-white',
+
+      icon:
+        'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400',
+    },
+
+    emerald: {
+      value:
+        'text-emerald-600 dark:text-emerald-400',
+
+      icon:
+        'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+    },
+
+    blue: {
+      value:
+        'text-blue-600 dark:text-blue-400',
+
+      icon:
+        'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
+    },
+
+    rose: {
+      value:
+        'text-rose-600 dark:text-rose-400',
+
+      icon:
+        'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
+    },
+  };
+
+  const styles =
+    variants[variant] ||
+    variants.indigo;
+
+  return (
+    <div className="
+      flex
+      items-center
+      justify-between
+      rounded-2xl
+      border
+      border-slate-200/80
+      dark:border-slate-700/60
+      bg-white
+      dark:bg-slate-800
+      p-5
+      shadow-sm
+    ">
+      <div>
+        <p className="
+          text-xs
+          font-medium
+          uppercase
+          tracking-wider
+          text-slate-500
+          dark:text-slate-400
+        ">
+          {label}
+        </p>
+
+        <h3
+          className={`
+            mt-1
+            text-3xl
+            font-extrabold
+            ${styles.value}
+          `}
+        >
+          {value}
+        </h3>
+      </div>
+
+      <div
+        className={`
+          rounded-xl
+          p-3
+          ${styles.icon}
+        `}
+      >
+        <Icon
+          className="
+            h-6
+            w-6
+          "
+        />
       </div>
     </div>
+  );
+}
+
+function ContentMetric({
+  label,
+  value,
+}) {
+  return (
+    <div className="
+      rounded-xl
+      bg-slate-50
+      dark:bg-slate-900/50
+      px-3
+      py-3
+      text-center
+    ">
+      <p className="
+        text-xl
+        font-bold
+        text-slate-900
+        dark:text-white
+      ">
+        {value}
+      </p>
+
+      <p className="
+        mt-1
+        text-xs
+        text-slate-500
+        dark:text-slate-400
+      ">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function PaginationButton({
+  children,
+  label,
+  disabled,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="
+        inline-flex
+        h-8
+        w-8
+        items-center
+        justify-center
+        rounded-lg
+        border
+        border-slate-200
+        dark:border-slate-700
+        text-slate-600
+        dark:text-slate-300
+        hover:bg-slate-50
+        dark:hover:bg-slate-700
+        disabled:cursor-not-allowed
+        disabled:opacity-40
+      "
+    >
+      {children}
+    </button>
   );
 }
