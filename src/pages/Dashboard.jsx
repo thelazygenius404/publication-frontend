@@ -6,6 +6,7 @@ import {
 
 import {
   AlertCircle,
+  Ban,
   BarChart3,
   CheckCircle2,
   ChevronLeft,
@@ -14,6 +15,7 @@ import {
   ChevronsRight,
   Clock,
   Download,
+  Eye,
   FileText,
   Filter,
   Globe2,
@@ -33,6 +35,7 @@ import {
 } from '../api/contents';
 
 import {
+  cancelPublication,
   getPublications,
 } from '../api/publications';
 
@@ -307,6 +310,21 @@ export default function Dashboard() {
     setItemsPerPage,
   ] = useState(5);
 
+  const [
+  selectedPublication,
+  setSelectedPublication,
+] = useState(null);
+
+const [
+  cancellingId,
+  setCancellingId,
+] = useState(null);
+
+const [
+  success,
+  setSuccess,
+] = useState('');
+
   useEffect(() => {
     let cancelled = false;
 
@@ -513,13 +531,83 @@ export default function Dashboard() {
     );
 
   const handleRetry = () => {
-    setError('');
-    setIsLoading(true);
+  setError('');
+  setSuccess('');
+  setIsLoading(true);
 
-    setReloadKey(
-      (value) =>
-        value + 1,
+  setReloadKey(
+    (value) =>
+      value + 1,
+  );
+};
+
+const handleCancelPublication =
+  async (publication) => {
+    if (
+      ![
+        'PENDING',
+        'SCHEDULED',
+      ].includes(
+        publication.status,
+      )
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Annuler la publication #${publication.id} ?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setCancellingId(
+      publication.id,
     );
+
+    try {
+      const updated =
+        await cancelPublication(
+          publication.id,
+        );
+
+      setPublications(
+        (current) =>
+          current.map(
+            (item) =>
+              item.id ===
+              updated.id
+                ? updated
+                : item,
+          ),
+      );
+
+      setSelectedPublication(
+        (current) =>
+          current?.id ===
+          updated.id
+            ? updated
+            : current,
+      );
+
+      setSuccess(
+        `Publication #${updated.id} annulée avec succès.`,
+      );
+    } catch (exception) {
+      setError(
+        getErrorMessage(
+          exception,
+        ),
+      );
+    } finally {
+      setCancellingId(
+        null,
+      );
+    }
   };
 
   const resetFilters = () => {
@@ -781,6 +869,7 @@ export default function Dashboard() {
                 dark:text-rose-400
               ">
                 {error}
+
               </p>
             </div>
           </div>
@@ -800,6 +889,39 @@ export default function Dashboard() {
           </button>
         </div>
       )}
+
+{success && (
+  <div
+    role="status"
+    className="
+      flex
+      items-start
+      gap-3
+      rounded-xl
+      border
+      border-emerald-200
+      dark:border-emerald-900
+      bg-emerald-50
+      dark:bg-emerald-950/30
+      px-4
+      py-3
+      text-emerald-700
+      dark:text-emerald-300
+    "
+  >
+    <CheckCircle2
+      size={19}
+      className="
+        mt-0.5
+        shrink-0
+      "
+    />
+
+    <p className="text-sm">
+      {success}
+    </p>
+  </div>
+)}
 
       <div className="
         grid
@@ -1417,6 +1539,14 @@ export default function Dashboard() {
                 <th className="px-5 py-3">
                   Publiée
                 </th>
+
+                <th className="
+                  px-5
+                  py-3
+                  text-right
+                  ">
+                  Actions
+                </th>
               </tr>
             </thead>
 
@@ -1533,13 +1663,106 @@ export default function Dashboard() {
                           publication.publishedAt,
                         )}
                       </td>
+                      <td className="
+                        px-5
+                        py-4
+                      ">
+                        <div className="
+                          flex
+                          items-center
+                          justify-end
+                          gap-2
+                        ">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedPublication(
+                                publication,
+                              )
+                            }
+                            className="
+                              inline-flex
+                              items-center
+                              gap-1.5
+                              rounded-lg
+                              border
+                              border-slate-200
+                              dark:border-slate-700
+                              px-3
+                              py-2
+                              text-xs
+                              font-medium
+                              text-slate-700
+                              dark:text-slate-200
+                              hover:bg-slate-50
+                              dark:hover:bg-slate-700
+                            "
+                            title="Voir les détails"
+                          >
+                            <Eye size={15} />
+                            Détails
+                          </button>
+
+                          {[
+                            'PENDING',
+                            'SCHEDULED',
+                          ].includes(
+                            publication.status,
+                          ) && (
+                            <button
+                              type="button"
+                              disabled={
+                                cancellingId ===
+                                publication.id
+                              }
+                              onClick={() =>
+                                handleCancelPublication(
+                                  publication,
+                                )
+                              }
+                              className="
+                                inline-flex
+                                items-center
+                                gap-1.5
+                                rounded-lg
+                                border
+                                border-rose-200
+                                dark:border-rose-900
+                                px-3
+                                py-2
+                                text-xs
+                                font-medium
+                                text-rose-600
+                                dark:text-rose-400
+                                hover:bg-rose-50
+                                dark:hover:bg-rose-950/30
+                                disabled:opacity-50
+                              "
+                            >
+                              {cancellingId ===
+                              publication.id ? (
+                                <LoaderCircle
+                                  size={15}
+                                  className="
+                                    animate-spin
+                                  "
+                                />
+                              ) : (
+                                <Ban size={15} />
+                              )}
+
+                              Annuler
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ),
                 )
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="
                       px-6
                       py-14
@@ -1664,6 +1887,356 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+      {selectedPublication && (
+  <PublicationDetailsModal
+    publication={
+      selectedPublication
+    }
+    cancelling={
+      cancellingId ===
+      selectedPublication.id
+    }
+    onCancel={
+      handleCancelPublication
+    }
+    onClose={() =>
+      setSelectedPublication(
+        null,
+      )
+    }
+  />
+)}
+    </div>
+  );
+}
+function PublicationDetailsModal({
+  publication,
+  cancelling,
+  onCancel,
+  onClose,
+}) {
+  const canCancel =
+    [
+      'PENDING',
+      'SCHEDULED',
+    ].includes(
+      publication.status,
+    );
+
+  return (
+    <div
+      className="
+        fixed
+        inset-0
+        z-50
+        flex
+        items-center
+        justify-center
+        bg-slate-950/60
+        p-4
+        backdrop-blur-sm
+      "
+      onMouseDown={(
+        event,
+      ) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publication-details-title"
+        className="
+          w-full
+          max-w-2xl
+          max-h-[90vh]
+          overflow-y-auto
+          rounded-2xl
+          border
+          border-slate-200
+          dark:border-slate-700
+          bg-white
+          dark:bg-slate-800
+          shadow-2xl
+        "
+      >
+        <div className="
+          flex
+          items-start
+          justify-between
+          gap-4
+          border-b
+          border-slate-200
+          dark:border-slate-700
+          px-6
+          py-5
+        ">
+          <div>
+            <p className="
+              text-xs
+              font-semibold
+              uppercase
+              tracking-wide
+              text-slate-500
+              dark:text-slate-400
+            ">
+              Publication
+              {' '}
+              #{publication.id}
+            </p>
+
+            <h2
+              id="publication-details-title"
+              className="
+                mt-1
+                text-lg
+                font-bold
+                text-slate-900
+                dark:text-white
+              "
+            >
+              {publication.title}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="
+              rounded-lg
+              p-2
+              text-slate-500
+              hover:bg-slate-100
+              dark:hover:bg-slate-700
+            "
+            aria-label="Fermer"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="
+          grid
+          grid-cols-1
+          gap-4
+          p-6
+          sm:grid-cols-2
+        ">
+          <DetailItem
+            label="ID publication"
+            value={
+              publication.id
+            }
+          />
+
+          <DetailItem
+            label="ID contenu"
+            value={
+              publication.contentId
+            }
+          />
+
+          <DetailItem
+            label="Destination"
+            value={destinationLabel(
+              publication.destination,
+            )}
+          />
+
+          <DetailItem
+            label="Statut"
+            value={
+              STATUS_LABELS[
+                publication.status
+              ] ||
+              publication.status
+            }
+          />
+
+          <DetailItem
+            label="Créée"
+            value={formatDate(
+              publication.createdAt,
+            )}
+          />
+
+          <DetailItem
+            label="Dernière mise à jour"
+            value={formatDate(
+              publication.updatedAt,
+            )}
+          />
+
+          <DetailItem
+            label="Planifiée"
+            value={formatDate(
+              publication.scheduledAt,
+            )}
+          />
+
+          <DetailItem
+            label="Publiée"
+            value={formatDate(
+              publication.publishedAt,
+            )}
+          />
+
+          <DetailItem
+            label="ID externe"
+            value={
+              publication.externalId ||
+              '—'
+            }
+          />
+
+          <DetailItem
+            label="Exécution n8n"
+            value={
+              publication.n8nExecutionId ||
+              '—'
+            }
+          />
+
+          <div className="
+            sm:col-span-2
+          ">
+            <DetailItem
+              label="Message d’erreur"
+              value={
+                publication.errorMessage ||
+                'Aucune erreur'
+              }
+              error={
+                Boolean(
+                  publication.errorMessage,
+                )
+              }
+            />
+          </div>
+        </div>
+
+        <div className="
+          flex
+          items-center
+          justify-end
+          gap-3
+          border-t
+          border-slate-200
+          dark:border-slate-700
+          px-6
+          py-4
+        ">
+          <button
+            type="button"
+            onClick={onClose}
+            className="
+              rounded-xl
+              border
+              border-slate-200
+              dark:border-slate-700
+              px-4
+              py-2.5
+              text-sm
+              font-medium
+              text-slate-700
+              dark:text-slate-200
+              hover:bg-slate-50
+              dark:hover:bg-slate-700
+            "
+          >
+            Fermer
+          </button>
+
+          {canCancel && (
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() =>
+                onCancel(
+                  publication,
+                )
+              }
+              className="
+                inline-flex
+                items-center
+                gap-2
+                rounded-xl
+                bg-rose-600
+                px-4
+                py-2.5
+                text-sm
+                font-semibold
+                text-white
+                hover:bg-rose-700
+                disabled:opacity-50
+              "
+            >
+              {cancelling ? (
+                <LoaderCircle
+                  size={16}
+                  className="
+                    animate-spin
+                  "
+                />
+              ) : (
+                <Ban
+                  size={16}
+                />
+              )}
+
+              Annuler la publication
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  error = false,
+}) {
+  return (
+    <div className="
+      rounded-xl
+      bg-slate-50
+      dark:bg-slate-900/50
+      px-4
+      py-3
+    ">
+      <p className="
+        text-xs
+        font-medium
+        text-slate-500
+        dark:text-slate-400
+      ">
+        {label}
+      </p>
+
+      <p
+        className={`
+          mt-1
+          break-words
+          text-sm
+          font-medium
+          ${
+            error
+              ? 'text-rose-600 dark:text-rose-400'
+              : 'text-slate-900 dark:text-slate-200'
+          }
+        `}
+      >
+        {String(
+          value ?? '—',
+        )}
+      </p>
     </div>
   );
 }
