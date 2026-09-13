@@ -325,6 +325,11 @@ const [
   setSuccess,
 ] = useState('');
 
+const [
+  publicationToCancel,
+  setPublicationToCancel,
+] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -554,15 +559,6 @@ const handleCancelPublication =
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Annuler la publication #${publication.id} ?`,
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
     setError('');
     setSuccess('');
     setCancellingId(
@@ -596,6 +592,10 @@ const handleCancelPublication =
 
       setSuccess(
         `Publication #${updated.id} annulée avec succès.`,
+      );
+
+      setPublicationToCancel(
+        null,
       );
     } catch (exception) {
       setError(
@@ -1716,10 +1716,10 @@ const handleCancelPublication =
                                 publication.id
                               }
                               onClick={() =>
-                                handleCancelPublication(
-                                  publication,
-                                )
-                              }
+  setPublicationToCancel(
+    publication,
+  )
+}
                               className="
                                 inline-flex
                                 items-center
@@ -1896,9 +1896,11 @@ const handleCancelPublication =
       cancellingId ===
       selectedPublication.id
     }
-    onCancel={
-      handleCancelPublication
-    }
+    onCancel={(publication) =>
+  setPublicationToCancel(
+    publication,
+  )
+}
     onClose={() =>
       setSelectedPublication(
         null,
@@ -1906,9 +1908,219 @@ const handleCancelPublication =
     }
   />
 )}
+{publicationToCancel && (
+  <CancelPublicationModal
+    publication={
+      publicationToCancel
+    }
+    loading={
+      cancellingId ===
+      publicationToCancel.id
+    }
+    onClose={() =>
+      setPublicationToCancel(
+        null,
+      )
+    }
+    onConfirm={() =>
+      handleCancelPublication(
+        publicationToCancel,
+      )
+    }
+  />
+)}
     </div>
   );
 }
+function CancelPublicationModal({
+  publication,
+  loading,
+  onClose,
+  onConfirm,
+}) {
+  return (
+    <div
+      className="
+        fixed
+        inset-0
+        z-[60]
+        flex
+        items-center
+        justify-center
+        bg-slate-950/60
+        p-4
+        backdrop-blur-sm
+      "
+      onMouseDown={(event) => {
+        if (
+          event.target ===
+          event.currentTarget &&
+          !loading
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="cancel-publication-title"
+        className="
+          w-full
+          max-w-md
+          rounded-2xl
+          border
+          border-slate-200
+          dark:border-slate-700
+          bg-white
+          dark:bg-slate-800
+          shadow-2xl
+        "
+      >
+        <div className="
+          flex
+          gap-4
+          p-6
+        ">
+          <div className="
+            flex
+            h-11
+            w-11
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-rose-100
+            dark:bg-rose-950/50
+            text-rose-600
+            dark:text-rose-400
+          ">
+            <Ban size={20} />
+          </div>
+
+          <div>
+            <h2
+              id="cancel-publication-title"
+              className="
+                text-lg
+                font-bold
+                text-slate-900
+                dark:text-white
+              "
+            >
+              Annuler la publication ?
+            </h2>
+
+            <p className="
+              mt-2
+              text-sm
+              leading-6
+              text-slate-500
+              dark:text-slate-400
+            ">
+              La publication
+              {' '}
+              <strong>
+                #{publication.id}
+              </strong>
+              {' '}
+              « {publication.title} »
+              sera annulée.
+            </p>
+
+            {publication.status ===
+              'SCHEDULED' && (
+              <p className="
+                mt-2
+                text-sm
+                text-amber-600
+                dark:text-amber-400
+              ">
+                Elle ne sera plus
+                publiée à la date
+                planifiée.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="
+          flex
+          justify-end
+          gap-3
+          border-t
+          border-slate-200
+          dark:border-slate-700
+          px-6
+          py-4
+        ">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onClose}
+            className="
+              rounded-xl
+              border
+              border-slate-200
+              dark:border-slate-700
+              px-4
+              py-2.5
+              text-sm
+              font-medium
+              text-slate-700
+              dark:text-slate-200
+              hover:bg-slate-50
+              dark:hover:bg-slate-700
+              disabled:opacity-50
+            "
+          >
+            Retour
+          </button>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onConfirm}
+            className="
+              inline-flex
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              bg-rose-600
+              px-4
+              py-2.5
+              text-sm
+              font-semibold
+              text-white
+              hover:bg-rose-700
+              disabled:opacity-50
+            "
+          >
+            {loading ? (
+              <>
+                <LoaderCircle
+                  size={16}
+                  className="
+                    animate-spin
+                  "
+                />
+
+                Annulation...
+              </>
+            ) : (
+              <>
+                <Ban size={16} />
+                Confirmer
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PublicationDetailsModal({
   publication,
   cancelling,
