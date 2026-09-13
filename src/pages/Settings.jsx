@@ -1,450 +1,1355 @@
 import {
+  useCallback,
+  useEffect,
+  useRef,
   useState,
 } from 'react';
+
 import {
-  Link2,
-  Sparkles,
-  Workflow,
-  ShieldCheck,
+  AlertCircle,
+  Bot,
   CheckCircle2,
-  RefreshCw,
-  Save,
+  ExternalLink,
+  Globe2,
   KeyRound,
+  Link2,
+  LoaderCircle,
+  RefreshCw,
+  ShieldCheck,
+  Unplug,
+  Workflow,
 } from 'lucide-react';
 
+import {
+  disconnectLinkedInAccount,
+  disconnectWordPressAccount,
+  getAccounts,
+  getLinkedInAuthorizationUrl,
+  linkWordPressAccount,
+} from '../api/accounts';
+
+function getErrorMessage(
+  error,
+) {
+  return (
+    error.response?.data?.message ||
+    error.message ||
+    'Une erreur est survenue.'
+  );
+}
+
+function formatDate(
+  value,
+) {
+  if (!value) {
+    return '—';
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat(
+    'fr-FR',
+    {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    },
+  ).format(date);
+}
+
+function statusLabel(
+  account,
+) {
+  if (!account) {
+    return 'Indisponible';
+  }
+
+  if (
+    account.status ===
+    'EXPIRED'
+  ) {
+    return 'Expiré';
+  }
+
+  if (account.connected) {
+    return 'Connecté';
+  }
+
+  return 'Non connecté';
+}
+
+function statusClasses(
+  account,
+) {
+  if (
+    account?.status ===
+    'EXPIRED'
+  ) {
+    return `
+      bg-amber-500/10
+      text-amber-600
+      dark:text-amber-400
+      border-amber-500/20
+    `;
+  }
+
+  if (account?.connected) {
+    return `
+      bg-emerald-500/10
+      text-emerald-600
+      dark:text-emerald-400
+      border-emerald-500/20
+    `;
+  }
+
+  return `
+    bg-slate-500/10
+    text-slate-600
+    dark:text-slate-400
+    border-slate-500/20
+  `;
+}
+
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState('accounts');
+  const [
+    accounts,
+    setAccounts,
+  ] = useState(null);
 
-  // Account states
-  const [accounts, setAccounts] = useState({
-    linkedin: { connected: false, expiresAt: null, user: null },
-    wordpress: { connected: true, url: 'https://monblog-tech.ma', user: 'admin_emsi' },
+  const [
+    isLoading,
+    setIsLoading,
+  ] = useState(true);
+
+  const [
+    isRefreshing,
+    setIsRefreshing,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState('');
+
+  const [
+    success,
+    setSuccess,
+  ] = useState('');
+
+  const [
+    wordpressForm,
+    setWordpressForm,
+  ] = useState({
+    siteUrl: '',
+    wpUsername: '',
+    wpAppPassword: '',
   });
 
-  // Spring AI states
-  const [aiSettings, setAiSettings] = useState({
-    defaultTone: 'professionnel',
-    defaultLength: 'medium',
-    brandPrompt: 'Rédige toujours en adoptant une voix d’ingénieur logiciel axée sur les meilleures pratiques d’architecture logicielle et de sécurité.',
-    autoHashtags: true,
-  });
+  const [
+    isLinkingWordPress,
+    setIsLinkingWordPress,
+  ] = useState(false);
 
-  // n8n states
-  const [n8nSettings, setN8nSettings] = useState({
-    maxRetries: 3,
-    timezone: 'Africa/Casablanca',
-    webhookStatus: 'idle', // idle | testing | success | error
-  });
+  const [
+    isDisconnectingWordPress,
+    setIsDisconnectingWordPress,
+  ] = useState(false);
 
-  // Security states
-  const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [
+    isConnectingLinkedIn,
+    setIsConnectingLinkedIn,
+  ] = useState(false);
 
-  const handleTestWebhook = () => {
-    setN8nSettings((prev) => ({ ...prev, webhookStatus: 'testing' }));
-    setTimeout(() => {
-      setN8nSettings((prev) => ({ ...prev, webhookStatus: 'success' }));
-      setTimeout(() => {
-        setN8nSettings((prev) => ({ ...prev, webhookStatus: 'idle' }));
-      }, 3000);
-    }, 1200);
+  const [
+    isDisconnectingLinkedIn,
+    setIsDisconnectingLinkedIn,
+  ] = useState(false);
+
+  const oauthTimerRef =
+    useRef(null);
+
+  const oauthPopupRef =
+    useRef(null);
+
+  const clearMessages = () => {
+    setError('');
+    setSuccess('');
   };
 
-  const handleSaveSettings = (e) => {
-    e.preventDefault();
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
-  };
+  const loadAccounts =
+    useCallback(
+      async ({
+        silent = false,
+      } = {}) => {
+        if (!silent) {
+          setIsRefreshing(
+            true,
+          );
+        }
+
+        try {
+          const data =
+            await getAccounts();
+
+          setAccounts(data);
+
+          return data;
+        } catch (exception) {
+          setError(
+            getErrorMessage(
+              exception,
+            ),
+          );
+
+          return null;
+        } finally {
+          if (!silent) {
+            setIsRefreshing(
+              false,
+            );
+          }
+        }
+      },
+      [],
+    );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getAccounts()
+      .then(
+        (data) => {
+          if (!cancelled) {
+            setAccounts(data);
+          }
+        },
+      )
+      .catch(
+        (exception) => {
+          if (!cancelled) {
+            setError(
+              getErrorMessage(
+                exception,
+              ),
+            );
+          }
+        },
+      )
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(
+            false,
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+
+      if (
+        oauthTimerRef.current
+      ) {
+        clearInterval(
+          oauthTimerRef.current,
+        );
+      }
+    };
+  }, []);
+
+  const handleRefresh =
+    async () => {
+      clearMessages();
+
+      await loadAccounts();
+
+      setSuccess(
+        'État des intégrations actualisé.',
+      );
+    };
+
+  const handleWordPressSubmit =
+    async (event) => {
+      event.preventDefault();
+
+      clearMessages();
+
+      const siteUrl =
+        wordpressForm
+          .siteUrl
+          .trim();
+
+      const wpUsername =
+        wordpressForm
+          .wpUsername
+          .trim();
+
+      const wpAppPassword =
+        wordpressForm
+          .wpAppPassword
+          .trim();
+
+      if (
+        !siteUrl ||
+        !wpUsername ||
+        !wpAppPassword
+      ) {
+        setError(
+          'Tous les champs WordPress sont obligatoires.',
+        );
+
+        return;
+      }
+
+      setIsLinkingWordPress(
+        true,
+      );
+
+      try {
+        await linkWordPressAccount({
+          siteUrl,
+          wpUsername,
+          wpAppPassword,
+        });
+
+        await loadAccounts({
+          silent: true,
+        });
+
+        setWordpressForm({
+          siteUrl: '',
+          wpUsername: '',
+          wpAppPassword: '',
+        });
+
+        setSuccess(
+          'Compte WordPress connecté avec succès.',
+        );
+      } catch (exception) {
+        setError(
+          getErrorMessage(
+            exception,
+          ),
+        );
+      } finally {
+        setIsLinkingWordPress(
+          false,
+        );
+      }
+    };
+
+  const handleDisconnectWordPress =
+    async () => {
+      clearMessages();
+
+      setIsDisconnectingWordPress(
+        true,
+      );
+
+      try {
+        await disconnectWordPressAccount();
+
+        await loadAccounts({
+          silent: true,
+        });
+
+        setSuccess(
+          'Compte WordPress déconnecté.',
+        );
+      } catch (exception) {
+        setError(
+          getErrorMessage(
+            exception,
+          ),
+        );
+      } finally {
+        setIsDisconnectingWordPress(
+          false,
+        );
+      }
+    };
+
+  const stopOAuthPolling =
+    useCallback(() => {
+      if (
+        oauthTimerRef.current
+      ) {
+        clearInterval(
+          oauthTimerRef.current,
+        );
+
+        oauthTimerRef.current =
+          null;
+      }
+
+      setIsConnectingLinkedIn(
+        false,
+      );
+    }, []);
+
+  const handleConnectLinkedIn =
+    async () => {
+      clearMessages();
+
+      const popup =
+        window.open(
+          '',
+          'linkedin-oauth',
+          'width=650,height=760,resizable=yes,scrollbars=yes',
+        );
+
+      if (!popup) {
+        setError(
+          'Le navigateur a bloqué la fenêtre OAuth LinkedIn.',
+        );
+
+        return;
+      }
+
+      oauthPopupRef.current =
+        popup;
+
+      setIsConnectingLinkedIn(
+        true,
+      );
+
+      try {
+        const response =
+          await getLinkedInAuthorizationUrl();
+
+        const authorizationUrl =
+          response
+            ?.authorization_url;
+
+        if (!authorizationUrl) {
+          throw new Error(
+            'URL OAuth LinkedIn absente.',
+          );
+        }
+
+        popup.location.href =
+          authorizationUrl;
+
+        const startedAt =
+          Date.now();
+
+        oauthTimerRef.current =
+          setInterval(
+            async () => {
+              if (
+                Date.now() -
+                  startedAt >
+                120000
+              ) {
+                stopOAuthPolling();
+
+                setError(
+                  'La connexion LinkedIn a expiré. Réessayez.',
+                );
+
+                return;
+              }
+
+              try {
+                const data =
+                  await getAccounts();
+
+                setAccounts(
+                  data,
+                );
+
+                if (
+                  data?.linkedin
+                    ?.connected
+                ) {
+                  stopOAuthPolling();
+
+                  try {
+                    oauthPopupRef
+                      .current
+                      ?.close();
+                  } catch {
+                    // Ignore browser popup restrictions.
+                  }
+
+                  setSuccess(
+                    'Compte LinkedIn connecté avec succès.',
+                  );
+                }
+              } catch {
+                // Polling retries automatically.
+              }
+            },
+            1500,
+          );
+      } catch (exception) {
+        stopOAuthPolling();
+
+        try {
+          popup.close();
+        } catch {
+          // Ignore browser popup restrictions.
+        }
+
+        setError(
+          getErrorMessage(
+            exception,
+          ),
+        );
+      }
+    };
+
+  const handleDisconnectLinkedIn =
+    async () => {
+      clearMessages();
+
+      setIsDisconnectingLinkedIn(
+        true,
+      );
+
+      try {
+        await disconnectLinkedInAccount();
+
+        await loadAccounts({
+          silent: true,
+        });
+
+        setSuccess(
+          'Compte LinkedIn déconnecté.',
+        );
+      } catch (exception) {
+        setError(
+          getErrorMessage(
+            exception,
+          ),
+        );
+      } finally {
+        setIsDisconnectingLinkedIn(
+          false,
+        );
+      }
+    };
+
+  if (isLoading) {
+    return (
+      <div className="
+        min-h-[60vh]
+        flex
+        items-center
+        justify-center
+      ">
+        <div className="
+          flex
+          flex-col
+          items-center
+          gap-3
+          text-slate-500
+          dark:text-slate-400
+        ">
+          <LoaderCircle
+            className="
+              h-8
+              w-8
+              animate-spin
+              text-indigo-600
+            "
+          />
+
+          <p className="text-sm">
+            Chargement des
+            paramètres...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const linkedin =
+    accounts?.linkedin;
+
+  const wordpress =
+    accounts?.wordpress;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
-          Paramètres du système
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Gérez vos intégrations externes, configurez l'IA et sécurisez votre compte.
-        </p>
+    <div className="
+      max-w-6xl
+      mx-auto
+      space-y-6
+    ">
+      <div className="
+        flex
+        flex-col
+        gap-3
+        sm:flex-row
+        sm:items-center
+        sm:justify-between
+      ">
+        <div>
+          <h1 className="
+            text-2xl
+            font-bold
+            text-slate-900
+            dark:text-white
+          ">
+            Paramètres
+          </h1>
+
+          <p className="
+            mt-1
+            text-sm
+            text-slate-500
+            dark:text-slate-400
+          ">
+            Gérez les comptes
+            utilisés pour publier
+            votre contenu.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            handleRefresh
+          }
+          disabled={
+            isRefreshing
+          }
+          className="
+            inline-flex
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border
+            border-slate-200
+            dark:border-slate-700
+            bg-white
+            dark:bg-slate-800
+            px-4
+            py-2.5
+            text-sm
+            font-medium
+            text-slate-700
+            dark:text-slate-200
+            hover:bg-slate-50
+            dark:hover:bg-slate-700
+            disabled:opacity-50
+          "
+        >
+          <RefreshCw
+            size={16}
+            className={
+              isRefreshing
+                ? 'animate-spin'
+                : ''
+            }
+          />
+
+          Actualiser
+        </button>
       </div>
 
-      {/* Settings Navigation Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-700/80 gap-6 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('accounts')}
-          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'accounts'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+      {error && (
+        <Message
+          type="error"
+          icon={AlertCircle}
         >
-          <Link2 className="w-4 h-4" />
-          Comptes & Intégrations
-        </button>
+          {error}
+        </Message>
+      )}
 
-        <button
-          onClick={() => setActiveTab('ai')}
-          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'ai'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+      {success && (
+        <Message
+          type="success"
+          icon={
+            CheckCircle2
+          }
         >
-          <Sparkles className="w-4 h-4" />
-          Assistance IA (Spring AI)
-        </button>
+          {success}
+        </Message>
+      )}
 
-        <button
-          onClick={() => setActiveTab('orchestration')}
-          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'orchestration'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+      <section className="
+        grid
+        grid-cols-1
+        gap-5
+        xl:grid-cols-2
+      ">
+        <IntegrationCard
+          title="LinkedIn"
+          description="Publication via OAuth 2.0 et l’API LinkedIn."
+          icon={
+            <span className="
+              font-bold
+              text-[#0077B5]
+              text-lg
+            ">
+              in
+            </span>
+          }
+          account={linkedin}
         >
-          <Workflow className="w-4 h-4" />
-          Orchestration n8n
-        </button>
+          {linkedin?.connected ? (
+            <div className="
+              space-y-4
+            ">
+              <InfoRow
+                label="Expiration du jeton"
+                value={formatDate(
+                  linkedin
+                    .accessTokenExpiresAt,
+                )}
+              />
 
-        <button
-          onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === 'security'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4" />
-          Sécurité & Mot de passe
-        </button>
-      </div>
-
-      {/* TAB 1: ACCOUNTS & INTEGRATIONS */}
-      {activeTab === 'accounts' && (
-        <div className="space-y-4">
-          {/* LinkedIn Card */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#0077B5]/10 text-[#0077B5] flex items-center justify-center font-bold text-lg">
-                in
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-slate-800 dark:text-white">
-                    Compte LinkedIn
-                  </h3>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      accounts.linkedin.connected
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                    }`}
-                  >
-                    {accounts.linkedin.connected ? 'Connecté' : 'Non connecté'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Protocole OAuth 2.0 (Scopes : w_member_social, r_liteprofile).
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
-              {accounts.linkedin.connected ? (
-                <button
-                  onClick={() =>
-                    setAccounts((prev) => ({
-                      ...prev,
-                      linkedin: { connected: false, expiresAt: null, user: null },
-                    }))
-                  }
-                  className="px-4 py-2 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 text-xs font-semibold rounded-xl transition-all"
-                >
-                  Déconnecter
-                </button>
-              ) : (
-                <button
-                  onClick={() =>
-                    setAccounts((prev) => ({
-                      ...prev,
-                      linkedin: { connected: true, expiresAt: '2026-11-01', user: 'Bilal Elakry' },
-                    }))
-                  }
-                  className="px-4 py-2 bg-[#0077B5] hover:bg-[#006097] text-white text-xs font-semibold rounded-xl transition-all shadow-sm"
-                >
-                  Connecter LinkedIn
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* WordPress Card */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#21759B]/10 text-[#21759B] flex items-center justify-center font-bold text-lg">
-                W
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-slate-800 dark:text-white">
-                    Site WordPress
-                  </h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                    Connecté et authentifié
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-mono">
-                  {accounts.wordpress.url} (Utilisateur: {accounts.wordpress.user})
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
               <button
-                onClick={() =>
-                  setAccounts((prev) => ({
-                    ...prev,
-                    wordpress: { connected: false, url: '', user: '' },
-                  }))
+                type="button"
+                onClick={
+                  handleDisconnectLinkedIn
                 }
-                className="px-4 py-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                disabled={
+                  isDisconnectingLinkedIn
+                }
+                className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  border
+                  border-rose-200
+                  dark:border-rose-900
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-rose-600
+                  dark:text-rose-400
+                  hover:bg-rose-50
+                  dark:hover:bg-rose-950/30
+                  disabled:opacity-50
+                "
               >
+                {isDisconnectingLinkedIn ? (
+                  <LoaderCircle
+                    size={16}
+                    className="
+                      animate-spin
+                    "
+                  />
+                ) : (
+                  <Unplug
+                    size={16}
+                  />
+                )}
+
                 Déconnecter
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: SPRING AI PREFERENCES */}
-      {activeTab === 'ai' && (
-        <form onSubmit={handleSaveSettings} className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-6">
-          <div>
-            <h3 className="text-base font-bold text-slate-800 dark:text-white">
-              Directives par défaut pour Spring AI
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Personnalisez les paramètres envoyés au modèle LLM lors de la génération assistée.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Tonalité par défaut
-              </label>
-              <select
-                value={aiSettings.defaultTone}
-                onChange={(e) => setAiSettings({ ...aiSettings, defaultTone: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="professionnel">Professionnel & Formel</option>
-                <option value="storytelling">Storytelling & Engageant</option>
-                <option value="technique">Technique & Didactique</option>
-                <option value="direct">Direct & Synthétique</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Longueur moyenne cible
-              </label>
-              <select
-                value={aiSettings.defaultLength}
-                onChange={(e) => setAiSettings({ ...aiSettings, defaultLength: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="short">Court (&lt; 100 mots - Idéal micro-post)</option>
-                <option value="medium">Moyen (150-300 mots - LinkedIn standard)</option>
-                <option value="long">Long (&gt; 500 mots - Article WordPress)</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Contexte de marque / Prompt système
-            </label>
-            <textarea
-              rows={3}
-              value={aiSettings.brandPrompt}
-              onChange={(e) => setAiSettings({ ...aiSettings, brandPrompt: e.target.value })}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              placeholder="Ex : Mentionne toujours l'expertise de notre entreprise en cybersécurité..."
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="hashtags"
-              checked={aiSettings.autoHashtags}
-              onChange={(e) => setAiSettings({ ...aiSettings, autoHashtags: e.target.checked })}
-              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <label htmlFor="hashtags" className="text-xs text-slate-700 dark:text-slate-300">
-              Générer automatiquement 3 à 5 hashtags pertinents à la fin du texte
-            </label>
-          </div>
-
-          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-700/60">
+          ) : (
             <button
-              type="submit"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all"
+              type="button"
+              onClick={
+                handleConnectLinkedIn
+              }
+              disabled={
+                isConnectingLinkedIn
+              }
+              className="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-[#0077B5]
+                px-4
+                py-2.5
+                text-sm
+                font-semibold
+                text-white
+                hover:bg-[#006097]
+                disabled:opacity-50
+              "
             >
-              <Save className="w-4 h-4" />
-              <span>Enregistrer les préférences</span>
+              {isConnectingLinkedIn ? (
+                <LoaderCircle
+                  size={16}
+                  className="
+                    animate-spin
+                  "
+                />
+              ) : (
+                <ExternalLink
+                  size={16}
+                />
+              )}
+
+              {isConnectingLinkedIn
+                ? 'Connexion en cours...'
+                : 'Connecter LinkedIn'}
             </button>
-          </div>
-        </form>
-      )}
+          )}
+        </IntegrationCard>
 
-      {/* TAB 3: n8n ORCHESTRATION */}
-      {activeTab === 'orchestration' && (
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-6">
-          <div>
-            <h3 className="text-base font-bold text-slate-800 dark:text-white">
-              Configuration de l'orchestrateur de flux
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Paramètres d'exécution des nœuds d'attente (Wait) et gestion des politiques de retry.
-            </p>
-          </div>
+        <IntegrationCard
+          title="WordPress"
+          description="Publication via WordPress REST API et mot de passe d’application."
+          icon={
+            <Globe2
+              size={20}
+            />
+          }
+          account={wordpress}
+        >
+          {wordpress?.connected ? (
+            <div className="
+              space-y-4
+            ">
+              <InfoRow
+                label="Site"
+                value={
+                  wordpress.siteUrl ||
+                  '—'
+                }
+              />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Tentatives automatiques en cas d'échec API (Retry)
-              </label>
-              <select
-                value={n8nSettings.maxRetries}
-                onChange={(e) => setN8nSettings({ ...n8nSettings, maxRetries: Number(e.target.value) })}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              <button
+                type="button"
+                onClick={
+                  handleDisconnectWordPress
+                }
+                disabled={
+                  isDisconnectingWordPress
+                }
+                className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  border
+                  border-rose-200
+                  dark:border-rose-900
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-rose-600
+                  dark:text-rose-400
+                  hover:bg-rose-50
+                  dark:hover:bg-rose-950/30
+                  disabled:opacity-50
+                "
               >
-                <option value={1}>1 tentative (aucun retry)</option>
-                <option value={3}>3 tentatives (backoff exponentiel - Recommandé)</option>
-                <option value={5}>5 tentatives</option>
-              </select>
-            </div>
+                {isDisconnectingWordPress ? (
+                  <LoaderCircle
+                    size={16}
+                    className="
+                      animate-spin
+                    "
+                  />
+                ) : (
+                  <Unplug
+                    size={16}
+                  />
+                )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                Fuseau horaire de planification
-              </label>
-              <input
+                Déconnecter
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={
+                handleWordPressSubmit
+              }
+              className="
+                space-y-4
+              "
+            >
+              <Field
+                label="URL du site"
+                type="url"
+                placeholder="https://example.com"
+                value={
+                  wordpressForm
+                    .siteUrl
+                }
+                onChange={(
+                  value,
+                ) =>
+                  setWordpressForm(
+                    (current) => ({
+                      ...current,
+                      siteUrl:
+                        value,
+                    }),
+                  )
+                }
+              />
+
+              <Field
+                label="Nom d’utilisateur"
                 type="text"
-                disabled
-                value={n8nSettings.timezone}
-                className="w-full bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-500 cursor-not-allowed font-mono"
+                autoComplete="username"
+                value={
+                  wordpressForm
+                    .wpUsername
+                }
+                onChange={(
+                  value,
+                ) =>
+                  setWordpressForm(
+                    (current) => ({
+                      ...current,
+                      wpUsername:
+                        value,
+                    }),
+                  )
+                }
               />
-            </div>
+
+              <Field
+                label="Mot de passe d’application"
+                type="password"
+                autoComplete="new-password"
+                value={
+                  wordpressForm
+                    .wpAppPassword
+                }
+                onChange={(
+                  value,
+                ) =>
+                  setWordpressForm(
+                    (current) => ({
+                      ...current,
+                      wpAppPassword:
+                        value,
+                    }),
+                  )
+                }
+              />
+
+              <p className="
+                text-xs
+                text-slate-500
+                dark:text-slate-400
+              ">
+                Le mot de passe est
+                envoyé au backend puis
+                stocké chiffré. Il
+                n’est pas conservé
+                dans le navigateur.
+              </p>
+
+              <button
+                type="submit"
+                disabled={
+                  isLinkingWordPress
+                }
+                className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  bg-indigo-600
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-semibold
+                  text-white
+                  hover:bg-indigo-700
+                  disabled:opacity-50
+                "
+              >
+                {isLinkingWordPress ? (
+                  <LoaderCircle
+                    size={16}
+                    className="
+                      animate-spin
+                    "
+                  />
+                ) : (
+                  <Link2
+                    size={16}
+                  />
+                )}
+
+                Connecter WordPress
+              </button>
+            </form>
+          )}
+        </IntegrationCard>
+      </section>
+
+      <section className="
+        rounded-2xl
+        border
+        border-slate-200
+        dark:border-slate-700
+        bg-white
+        dark:bg-slate-800
+        p-6
+        shadow-sm
+      ">
+        <div className="
+          flex
+          items-center
+          gap-3
+          mb-5
+        ">
+          <div className="
+            flex
+            h-10
+            w-10
+            items-center
+            justify-center
+            rounded-xl
+            bg-indigo-50
+            dark:bg-indigo-950/40
+            text-indigo-600
+            dark:text-indigo-400
+          ">
+            <ShieldCheck
+              size={20}
+            />
           </div>
 
-          {/* Webhook Connectivity Ping Test */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/60 rounded-xl flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-slate-800 dark:text-white">
-                Test de liaison Webhook (Spring Boot ↔ n8n)
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Vérifie que l'endpoint `/api/n8n/callback` répond avec le secret partagé.
-              </p>
-            </div>
-
-            <button
-              onClick={handleTestWebhook}
-              disabled={n8nSettings.webhookStatus === 'testing'}
-              className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all text-slate-700 dark:text-slate-200"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${
-                  n8nSettings.webhookStatus === 'testing' ? 'animate-spin text-indigo-600' : ''
-                }`}
-              />
-              <span>
-                {n8nSettings.webhookStatus === 'testing'
-                  ? 'Test en cours...'
-                  : n8nSettings.webhookStatus === 'success'
-                  ? 'Connecté (200 OK)'
-                  : 'Tester la liaison'}
-              </span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: SECURITY & CREDENTIALS */}
-      {activeTab === 'security' && (
-        <form onSubmit={handleSaveSettings} className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm space-y-6">
           <div>
-            <h3 className="text-base font-bold text-slate-800 dark:text-white">
-              Sécurité et authentification
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Mettez à jour le mot de passe de votre compte et vérifiez la conformité de chiffrement.
+            <h2 className="
+              font-semibold
+              text-slate-900
+              dark:text-white
+            ">
+              Architecture du système
+            </h2>
+
+            <p className="
+              text-xs
+              text-slate-500
+              dark:text-slate-400
+            ">
+              Fonctionnalités
+              configurées côté serveur.
             </p>
           </div>
-
-          <div className="space-y-3 max-w-md">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Mot de passe actuel
-              </label>
-              <input
-                type="password"
-                value={passwords.current}
-                onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Nouveau mot de passe
-              </label>
-              <input
-                type="password"
-                value={passwords.new}
-                onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Confirmer le nouveau mot de passe
-              </label>
-              <input
-                type="password"
-                value={passwords.confirm}
-                onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-700/60">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all"
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>Changer le mot de passe</span>
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Feedback Alert Toast */}
-      {saveSuccess && (
-        <div className="fixed bottom-6 right-6 bg-emerald-600 text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>Paramètres mis à jour avec succès !</span>
         </div>
-      )}
+
+        <div className="
+          grid
+          grid-cols-1
+          gap-3
+          md:grid-cols-3
+        ">
+          <SystemCard
+            icon={Bot}
+            title="Spring AI"
+            description="Génération et amélioration de contenu avec Gemini."
+          />
+
+          <SystemCard
+            icon={Workflow}
+            title="n8n"
+            description="Orchestration asynchrone, planification et retries."
+          />
+
+          <SystemCard
+            icon={KeyRound}
+            title="Sécurité"
+            description="JWT et chiffrement serveur des identifiants tiers."
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function IntegrationCard({
+  title,
+  description,
+  icon,
+  account,
+  children,
+}) {
+  return (
+    <article className="
+      rounded-2xl
+      border
+      border-slate-200
+      dark:border-slate-700
+      bg-white
+      dark:bg-slate-800
+      p-6
+      shadow-sm
+      space-y-5
+    ">
+      <div className="
+        flex
+        items-start
+        justify-between
+        gap-4
+      ">
+        <div className="
+          flex
+          items-start
+          gap-3
+        ">
+          <div className="
+            flex
+            h-11
+            w-11
+            shrink-0
+            items-center
+            justify-center
+            rounded-xl
+            bg-slate-50
+            dark:bg-slate-900
+            border
+            border-slate-200
+            dark:border-slate-700
+          ">
+            {icon}
+          </div>
+
+          <div>
+            <h2 className="
+              font-semibold
+              text-slate-900
+              dark:text-white
+            ">
+              {title}
+            </h2>
+
+            <p className="
+              mt-1
+              text-xs
+              text-slate-500
+              dark:text-slate-400
+            ">
+              {description}
+            </p>
+          </div>
+        </div>
+
+        <span
+          className={`
+            shrink-0
+            rounded-full
+            border
+            px-2.5
+            py-1
+            text-xs
+            font-semibold
+            ${statusClasses(
+              account,
+            )}
+          `}
+        >
+          {statusLabel(
+            account,
+          )}
+        </span>
+      </div>
+
+      <div className="
+        border-t
+        border-slate-100
+        dark:border-slate-700
+        pt-5
+      ">
+        {children}
+      </div>
+    </article>
+  );
+}
+
+function Field({
+  label,
+  type,
+  value,
+  onChange,
+  placeholder,
+  autoComplete,
+}) {
+  return (
+    <div>
+      <label className="
+        block
+        mb-1.5
+        text-xs
+        font-semibold
+        text-slate-700
+        dark:text-slate-300
+      ">
+        {label}
+      </label>
+
+      <input
+        type={type}
+        required
+        value={value}
+        placeholder={
+          placeholder
+        }
+        autoComplete={
+          autoComplete
+        }
+        onChange={(
+          event,
+        ) =>
+          onChange(
+            event.target.value,
+          )
+        }
+        className="
+          w-full
+          rounded-xl
+          border
+          border-slate-300
+          dark:border-slate-600
+          bg-transparent
+          px-3
+          py-2.5
+          text-sm
+          text-slate-900
+          dark:text-white
+          outline-none
+          focus:border-indigo-500
+          focus:ring-2
+          focus:ring-indigo-500/20
+        "
+      />
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}) {
+  return (
+    <div className="
+      rounded-xl
+      bg-slate-50
+      dark:bg-slate-900/60
+      px-4
+      py-3
+    ">
+      <p className="
+        text-xs
+        text-slate-500
+        dark:text-slate-400
+      ">
+        {label}
+      </p>
+
+      <p className="
+        mt-1
+        break-all
+        text-sm
+        font-medium
+        text-slate-800
+        dark:text-slate-200
+      ">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SystemCard({
+  icon: Icon,
+  title,
+  description,
+}) {
+  return (
+    <div className="
+      rounded-xl
+      border
+      border-slate-200
+      dark:border-slate-700
+      bg-slate-50
+      dark:bg-slate-900/50
+      p-4
+    ">
+      <Icon
+        size={20}
+        className="
+          text-indigo-600
+          dark:text-indigo-400
+        "
+      />
+
+      <h3 className="
+        mt-3
+        text-sm
+        font-semibold
+        text-slate-900
+        dark:text-white
+      ">
+        {title}
+      </h3>
+
+      <p className="
+        mt-1
+        text-xs
+        leading-5
+        text-slate-500
+        dark:text-slate-400
+      ">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function Message({
+  children,
+  type,
+  icon: Icon,
+}) {
+  const success =
+    type === 'success';
+
+  return (
+    <div
+      role={
+        success
+          ? 'status'
+          : 'alert'
+      }
+      className={`
+        flex
+        items-start
+        gap-3
+        rounded-xl
+        border
+        px-4
+        py-3
+        ${
+          success
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300'
+            : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300'
+        }
+      `}
+    >
+      <Icon
+        size={19}
+        className="
+          mt-0.5
+          shrink-0
+        "
+      />
+
+      <p className="text-sm">
+        {children}
+      </p>
     </div>
   );
 }
