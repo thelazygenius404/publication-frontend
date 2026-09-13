@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useState,
 } from 'react';
 
@@ -11,7 +12,9 @@ import {
   LoaderCircle,
   Lock,
   Mail,
+  Moon,
   Sparkles,
+  Sun,
   UserPlus,
 } from 'lucide-react';
 
@@ -36,8 +39,10 @@ export default function Register() {
     register,
   } = useAuth();
 
-  const [email, setEmail] =
-    useState('');
+  const [
+    email,
+    setEmail,
+  ] = useState('');
 
   const [
     password,
@@ -54,8 +59,47 @@ export default function Register() {
     setIsLoading,
   ] = useState(false);
 
-  const [error, setError] =
-    useState('');
+  const [
+    error,
+    setError,
+  ] = useState('');
+
+  const [
+    isDark,
+    setIsDark,
+  ] = useState(() => {
+    const storedTheme =
+      localStorage.getItem(
+        'autopublisher-theme',
+      );
+
+    if (storedTheme) {
+      return (
+        storedTheme ===
+        'dark'
+      );
+    }
+
+    return window.matchMedia(
+      '(prefers-color-scheme: dark)',
+    ).matches;
+  });
+
+  useEffect(() => {
+    document.documentElement
+      .classList
+      .toggle(
+        'dark',
+        isDark,
+      );
+
+    localStorage.setItem(
+      'autopublisher-theme',
+      isDark
+        ? 'dark'
+        : 'light',
+    );
+  }, [isDark]);
 
   const handleSubmit =
     async (event) => {
@@ -105,69 +149,118 @@ export default function Register() {
           ),
         );
       } finally {
-        setIsLoading(false);
+        setIsLoading(
+          false,
+        );
       }
     };
 
   return (
-    <div className="
-      min-h-screen
-      flex
-      items-center
-      justify-center
-      bg-gray-50
-      dark:bg-gray-900
-      p-4
-    ">
-      <div className="
-        max-w-md
-        w-full
-        bg-white
-        dark:bg-gray-800
-        rounded-2xl
-        shadow-lg
-        border
-        border-gray-200
-        dark:border-gray-700
-        p-8
-      ">
-        <div className="
-          text-center
-          mb-8
-        ">
-          <div className="
-            inline-flex
-            items-center
-            justify-center
-            w-12
-            h-12
-            rounded-full
-            bg-blue-100
-            dark:bg-blue-900/30
-            text-blue-600
-            dark:text-blue-400
-            mb-4
-          ">
+    <div
+      className="
+        relative
+        flex
+        min-h-screen
+        items-center
+        justify-center
+        bg-gray-50
+        p-4
+        transition-colors
+        dark:bg-gray-900
+      "
+    >
+      <button
+        type="button"
+        onClick={() =>
+          setIsDark(
+            (value) =>
+              !value,
+          )
+        }
+        aria-label="Changer de thème"
+        className="
+          absolute
+          right-6
+          top-6
+          rounded-full
+          bg-gray-200
+          p-2.5
+          text-gray-600
+          shadow-sm
+          transition-colors
+          hover:bg-gray-300
+          dark:bg-gray-800
+          dark:text-gray-300
+          dark:hover:bg-gray-700
+        "
+      >
+        {isDark ? (
+          <Sun size={20} />
+        ) : (
+          <Moon size={20} />
+        )}
+      </button>
+
+      <div
+        className="
+          w-full
+          max-w-md
+          rounded-2xl
+          border
+          border-gray-200
+          bg-white
+          p-6
+          shadow-lg
+          dark:border-gray-700
+          dark:bg-gray-800
+          sm:p-8
+        "
+      >
+        <div
+          className="
+            mb-8
+            text-center
+          "
+        >
+          <div
+            className="
+              mb-4
+              inline-flex
+              h-12
+              w-12
+              items-center
+              justify-center
+              rounded-full
+              bg-blue-100
+              text-blue-600
+              dark:bg-blue-900/30
+              dark:text-blue-400
+            "
+          >
             <Sparkles
               size={24}
             />
           </div>
 
-          <h1 className="
-            text-2xl
-            font-bold
-            text-gray-900
-            dark:text-white
-          ">
+          <h1
+            className="
+              text-2xl
+              font-bold
+              text-gray-900
+              dark:text-white
+            "
+          >
             Créer un compte
           </h1>
 
-          <p className="
-            text-sm
-            text-gray-600
-            dark:text-gray-400
-            mt-2
-          ">
+          <p
+            className="
+              mt-2
+              text-sm
+              text-gray-600
+              dark:text-gray-400
+            "
+          >
             Commencez à gérer
             vos publications
           </p>
@@ -181,13 +274,13 @@ export default function Register() {
               rounded-lg
               border
               border-red-200
-              dark:border-red-900
               bg-red-50
-              dark:bg-red-950/40
               px-4
               py-3
               text-sm
               text-red-700
+              dark:border-red-900
+              dark:bg-red-950/40
               dark:text-red-300
             "
           >
@@ -223,7 +316,9 @@ export default function Register() {
             label="Mot de passe"
             type="password"
             autoComplete="new-password"
-            value={password}
+            value={
+              password
+            }
             onChange={
               setPassword
             }
@@ -260,20 +355,20 @@ export default function Register() {
               isLoading
             }
             className="
-              w-full
               flex
+              w-full
               items-center
               justify-center
               gap-2
+              rounded-lg
               bg-blue-600
-              hover:bg-blue-700
-              disabled:bg-blue-400
-              text-white
               px-6
               py-2.5
-              rounded-lg
               font-medium
+              text-white
               transition-colors
+              hover:bg-blue-700
+              disabled:bg-blue-400
             "
           >
             {isLoading ? (
@@ -295,21 +390,24 @@ export default function Register() {
           </button>
         </form>
 
-        <p className="
-          mt-6
-          text-center
-          text-sm
-          text-gray-600
-          dark:text-gray-400
-        ">
+        <p
+          className="
+            mt-6
+            text-center
+            text-sm
+            text-gray-600
+            dark:text-gray-400
+          "
+        >
           Déjà inscrit ?{' '}
+
           <Link
             to="/login"
             className="
               font-medium
               text-blue-600
-              dark:text-blue-400
               hover:underline
+              dark:text-blue-400
             "
           >
             Se connecter
@@ -337,18 +435,22 @@ function AuthInput({
       <label
         htmlFor={id}
         className="
+          mb-2
           block
           text-sm
           font-medium
           text-gray-700
           dark:text-gray-300
-          mb-2
         "
       >
         {label}
       </label>
 
-      <div className="relative">
+      <div
+        className="
+          relative
+        "
+      >
         <Icon
           size={18}
           className="
@@ -386,20 +488,20 @@ function AuthInput({
           }
           className="
             w-full
-            pl-10
-            pr-4
-            py-2.5
-            bg-transparent
+            rounded-lg
             border
             border-gray-300
-            dark:border-gray-600
-            rounded-lg
+            bg-transparent
+            py-2.5
+            pl-10
+            pr-4
+            outline-none
+            focus:border-blue-500
             focus:ring-2
             focus:ring-blue-500
-            focus:border-blue-500
-            outline-none
-            dark:text-white
             disabled:opacity-60
+            dark:border-gray-600
+            dark:text-white
           "
         />
       </div>

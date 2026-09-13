@@ -43,8 +43,10 @@ export default function Login() {
     login,
   } = useAuth();
 
-  const [email, setEmail] =
-    useState('');
+  const [
+    email,
+    setEmail,
+  ] = useState('');
 
   const [
     password,
@@ -56,23 +58,46 @@ export default function Login() {
     setIsLoading,
   ] = useState(false);
 
-  const [error, setError] =
-    useState('');
+  const [
+    error,
+    setError,
+  ] = useState('');
 
-  const [isDark, setIsDark] =
-    useState(
-      document.documentElement
-        .classList.contains(
-          'dark',
-        ),
-    );
+  const [
+    isDark,
+    setIsDark,
+  ] = useState(() => {
+    const storedTheme =
+      localStorage.getItem(
+        'autopublisher-theme',
+      );
+
+    if (storedTheme) {
+      return (
+        storedTheme ===
+        'dark'
+      );
+    }
+
+    return window.matchMedia(
+      '(prefers-color-scheme: dark)',
+    ).matches;
+  });
 
   useEffect(() => {
     document.documentElement
-      .classList.toggle(
+      .classList
+      .toggle(
         'dark',
         isDark,
       );
+
+    localStorage.setItem(
+      'autopublisher-theme',
+      isDark
+        ? 'dark'
+        : 'light',
+    );
   }, [isDark]);
 
   const handleLogin =
@@ -105,22 +130,26 @@ export default function Login() {
           ),
         );
       } finally {
-        setIsLoading(false);
+        setIsLoading(
+          false,
+        );
       }
     };
 
   return (
-    <div className="
-      min-h-screen
-      flex
-      items-center
-      justify-center
-      bg-gray-50
-      dark:bg-gray-900
-      transition-colors
-      p-4
-      relative
-    ">
+    <div
+      className="
+        relative
+        flex
+        min-h-screen
+        items-center
+        justify-center
+        bg-gray-50
+        p-4
+        transition-colors
+        dark:bg-gray-900
+      "
+    >
       <button
         type="button"
         onClick={() =>
@@ -132,18 +161,18 @@ export default function Login() {
         aria-label="Changer de thème"
         className="
           absolute
-          top-6
           right-6
-          p-2.5
+          top-6
           rounded-full
           bg-gray-200
-          dark:bg-gray-800
+          p-2.5
           text-gray-600
-          dark:text-gray-300
-          hover:bg-gray-300
-          dark:hover:bg-gray-700
-          transition-colors
           shadow-sm
+          transition-colors
+          hover:bg-gray-300
+          dark:bg-gray-800
+          dark:text-gray-300
+          dark:hover:bg-gray-700
         "
       >
         {isDark ? (
@@ -153,55 +182,66 @@ export default function Login() {
         )}
       </button>
 
-      <div className="
-        max-w-md
-        w-full
-        bg-white
-        dark:bg-gray-800
-        rounded-2xl
-        shadow-lg
-        border
-        border-gray-200
-        dark:border-gray-700
-        p-8
-      ">
-        <div className="
-          text-center
-          mb-8
-        ">
-          <div className="
-            inline-flex
-            items-center
-            justify-center
-            w-12
-            h-12
-            rounded-full
-            bg-blue-100
-            dark:bg-blue-900/30
-            text-blue-600
-            dark:text-blue-400
-            mb-4
-          ">
+      <div
+        className="
+          w-full
+          max-w-md
+          rounded-2xl
+          border
+          border-gray-200
+          bg-white
+          p-6
+          shadow-lg
+          dark:border-gray-700
+          dark:bg-gray-800
+          sm:p-8
+        "
+      >
+        <div
+          className="
+            mb-8
+            text-center
+          "
+        >
+          <div
+            className="
+              mb-4
+              inline-flex
+              h-12
+              w-12
+              items-center
+              justify-center
+              rounded-full
+              bg-blue-100
+              text-blue-600
+              dark:bg-blue-900/30
+              dark:text-blue-400
+            "
+          >
             <Sparkles
               size={24}
             />
           </div>
 
-          <h1 className="
-            text-2xl
-            font-bold
-            text-gray-900
-            dark:text-white
-          ">
+          <h1
+            className="
+              text-2xl
+              font-bold
+              text-gray-900
+              dark:text-white
+            "
+          >
             AutoPublisher
           </h1>
 
-          <p className="
-            text-sm
-            text-gray-600
-            dark:text-gray-400
-            mt-2
-          ">
+          <p
+            className="
+              mt-2
+              text-sm
+              text-gray-600
+              dark:text-gray-400
+            "
+          >
             Connectez-vous pour
             gérer vos publications
           </p>
@@ -215,13 +255,13 @@ export default function Login() {
               rounded-lg
               border
               border-red-200
-              dark:border-red-900
               bg-red-50
-              dark:bg-red-950/40
               px-4
               py-3
               text-sm
               text-red-700
+              dark:border-red-900
+              dark:bg-red-950/40
               dark:text-red-300
             "
           >
@@ -241,18 +281,22 @@ export default function Login() {
             <label
               htmlFor="email"
               className="
+                mb-2
                 block
                 text-sm
                 font-medium
                 text-gray-700
                 dark:text-gray-300
-                mb-2
               "
             >
               Adresse email
             </label>
 
-            <div className="relative">
+            <div
+              className="
+                relative
+              "
+            >
               <Mail
                 size={18}
                 className="
@@ -281,24 +325,24 @@ export default function Login() {
                 disabled={
                   isLoading
                 }
+                placeholder="vous@example.com"
                 className="
                   w-full
-                  pl-10
-                  pr-4
-                  py-2.5
-                  bg-transparent
+                  rounded-lg
                   border
                   border-gray-300
-                  dark:border-gray-600
-                  rounded-lg
+                  bg-transparent
+                  py-2.5
+                  pl-10
+                  pr-4
+                  outline-none
+                  focus:border-blue-500
                   focus:ring-2
                   focus:ring-blue-500
-                  focus:border-blue-500
-                  outline-none
-                  dark:text-white
                   disabled:opacity-60
+                  dark:border-gray-600
+                  dark:text-white
                 "
-                placeholder="vous@example.com"
               />
             </div>
           </div>
@@ -307,18 +351,22 @@ export default function Login() {
             <label
               htmlFor="password"
               className="
+                mb-2
                 block
                 text-sm
                 font-medium
                 text-gray-700
                 dark:text-gray-300
-                mb-2
               "
             >
               Mot de passe
             </label>
 
-            <div className="relative">
+            <div
+              className="
+                relative
+              "
+            >
               <Lock
                 size={18}
                 className="
@@ -334,7 +382,9 @@ export default function Login() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                value={password}
+                value={
+                  password
+                }
                 onChange={(
                   event,
                 ) =>
@@ -349,20 +399,20 @@ export default function Login() {
                 }
                 className="
                   w-full
-                  pl-10
-                  pr-4
-                  py-2.5
-                  bg-transparent
+                  rounded-lg
                   border
                   border-gray-300
-                  dark:border-gray-600
-                  rounded-lg
+                  bg-transparent
+                  py-2.5
+                  pl-10
+                  pr-4
+                  outline-none
+                  focus:border-blue-500
                   focus:ring-2
                   focus:ring-blue-500
-                  focus:border-blue-500
-                  outline-none
-                  dark:text-white
                   disabled:opacity-60
+                  dark:border-gray-600
+                  dark:text-white
                 "
               />
             </div>
@@ -374,20 +424,20 @@ export default function Login() {
               isLoading
             }
             className="
-              w-full
               flex
+              w-full
               items-center
               justify-center
               gap-2
+              rounded-lg
               bg-blue-600
-              hover:bg-blue-700
-              disabled:bg-blue-400
-              text-white
               px-6
               py-2.5
-              rounded-lg
               font-medium
+              text-white
               transition-colors
+              hover:bg-blue-700
+              disabled:bg-blue-400
             "
           >
             {isLoading ? (
@@ -409,21 +459,24 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="
-          mt-6
-          text-center
-          text-sm
-          text-gray-600
-          dark:text-gray-400
-        ">
+        <p
+          className="
+            mt-6
+            text-center
+            text-sm
+            text-gray-600
+            dark:text-gray-400
+          "
+        >
           Pas encore de compte ?{' '}
+
           <Link
             to="/register"
             className="
               font-medium
               text-blue-600
-              dark:text-blue-400
               hover:underline
+              dark:text-blue-400
             "
           >
             Créer un compte

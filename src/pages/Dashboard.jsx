@@ -77,15 +77,19 @@ const STATUS_STYLES = {
     'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
 };
 
-function getErrorMessage(error) {
+function getErrorMessage(
+  error,
+) {
   return (
     error.response?.data?.message ||
     error.message ||
-    'Impossible de charger le tableau de bord.'
+    'Une erreur est survenue.'
   );
 }
 
-function formatDate(value) {
+function formatDate(
+  value,
+) {
   if (!value) {
     return '—';
   }
@@ -151,6 +155,46 @@ function connectionLabel(
   return 'Non connecté';
 }
 
+function canCancelPublication(
+  publication,
+) {
+  return [
+    'PENDING',
+    'SCHEDULED',
+  ].includes(
+    publication.status,
+  );
+}
+
+function StatusBadge({
+  status,
+}) {
+  return (
+    <span
+      className={`
+        inline-flex
+        shrink-0
+        rounded-full
+        border
+        px-2.5
+        py-1
+        text-xs
+        font-semibold
+        ${
+          STATUS_STYLES[
+            status
+          ] ||
+          'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+        }
+      `}
+    >
+      {STATUS_LABELS[
+        status
+      ] || status}
+    </span>
+  );
+}
+
 function AccountIndicator({
   name,
   account,
@@ -167,61 +211,71 @@ function AccountIndicator({
     <div
       className="
         flex
+        min-w-0
         items-center
         justify-between
-        gap-4
+        gap-3
         rounded-xl
         border
         border-slate-200
-        dark:border-slate-700
         bg-slate-50
-        dark:bg-slate-900/50
         px-4
         py-3
+        dark:border-slate-700
+        dark:bg-slate-900/50
       "
     >
-      <div className="
-        flex
-        items-center
-        gap-3
-        min-w-0
-      ">
-        <div className="
+      <div
+        className="
           flex
-          h-9
-          w-9
-          shrink-0
+          min-w-0
           items-center
-          justify-center
-          rounded-lg
-          bg-white
-          dark:bg-slate-800
-          border
-          border-slate-200
-          dark:border-slate-700
-        ">
-          <Icon
-            size={18}
-          />
+          gap-3
+        "
+      >
+        <div
+          className="
+            flex
+            h-9
+            w-9
+            shrink-0
+            items-center
+            justify-center
+            rounded-lg
+            border
+            border-slate-200
+            bg-white
+            dark:border-slate-700
+            dark:bg-slate-800
+          "
+        >
+          <Icon size={18} />
         </div>
 
         <div className="min-w-0">
-          <p className="
-            text-sm
-            font-semibold
-            text-slate-800
-            dark:text-white
-          ">
+          <p
+            className="
+              text-sm
+              font-semibold
+              text-slate-800
+              dark:text-white
+            "
+          >
             {name}
           </p>
 
           {account?.siteUrl && (
-            <p className="
-              text-xs
-              text-slate-500
-              dark:text-slate-400
-              truncate
-            ">
+            <p
+              className="
+                truncate
+                text-xs
+                text-slate-500
+                dark:text-slate-400
+              "
+              title={
+                account.siteUrl
+              }
+            >
               {account.siteUrl}
             </p>
           )}
@@ -239,10 +293,10 @@ function AccountIndicator({
           font-semibold
           ${
             connected
-              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
+              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
               : expired
-                ? 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400'
-                : 'bg-slate-500/10 text-slate-600 border-slate-500/20 dark:text-slate-400'
+                ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                : 'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400'
           }
         `}
       >
@@ -281,6 +335,11 @@ export default function Dashboard() {
   ] = useState('');
 
   const [
+    success,
+    setSuccess,
+  ] = useState('');
+
+  const [
     reloadKey,
     setReloadKey,
   ] = useState(0);
@@ -311,24 +370,19 @@ export default function Dashboard() {
   ] = useState(5);
 
   const [
-  selectedPublication,
-  setSelectedPublication,
-] = useState(null);
+    selectedPublication,
+    setSelectedPublication,
+  ] = useState(null);
 
-const [
-  cancellingId,
-  setCancellingId,
-] = useState(null);
+  const [
+    publicationToCancel,
+    setPublicationToCancel,
+  ] = useState(null);
 
-const [
-  success,
-  setSuccess,
-] = useState('');
-
-const [
-  publicationToCancel,
-  setPublicationToCancel,
-] = useState(null);
+  const [
+    cancellingId,
+    setCancellingId,
+  ] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,7 +440,9 @@ const [
       )
       .finally(() => {
         if (!cancelled) {
-          setIsLoading(false);
+          setIsLoading(
+            false,
+          );
         }
       });
 
@@ -536,79 +592,77 @@ const [
     );
 
   const handleRetry = () => {
-  setError('');
-  setSuccess('');
-  setIsLoading(true);
-
-  setReloadKey(
-    (value) =>
-      value + 1,
-  );
-};
-
-const handleCancelPublication =
-  async (publication) => {
-    if (
-      ![
-        'PENDING',
-        'SCHEDULED',
-      ].includes(
-        publication.status,
-      )
-    ) {
-      return;
-    }
-
     setError('');
     setSuccess('');
-    setCancellingId(
-      publication.id,
-    );
+    setIsLoading(true);
 
-    try {
-      const updated =
-        await cancelPublication(
-          publication.id,
+    setReloadKey(
+      (value) =>
+        value + 1,
+    );
+  };
+
+  const handleCancelPublication =
+    async (publication) => {
+      if (
+        !canCancelPublication(
+          publication,
+        )
+      ) {
+        return;
+      }
+
+      setError('');
+      setSuccess('');
+
+      setCancellingId(
+        publication.id,
+      );
+
+      try {
+        const updated =
+          await cancelPublication(
+            publication.id,
+          );
+
+        setPublications(
+          (current) =>
+            current.map(
+              (item) =>
+                item.id ===
+                updated.id
+                  ? updated
+                  : item,
+            ),
         );
 
-      setPublications(
-        (current) =>
-          current.map(
-            (item) =>
-              item.id ===
-              updated.id
-                ? updated
-                : item,
+        setSelectedPublication(
+          (current) =>
+            current?.id ===
+            updated.id
+              ? updated
+              : current,
+        );
+
+        setSuccess(
+          `Publication #${updated.id} annulée avec succès.`,
+        );
+
+        setPublicationToCancel(
+          null,
+        );
+      } catch (exception) {
+        setError(
+          getErrorMessage(
+            exception,
           ),
-      );
-
-      setSelectedPublication(
-        (current) =>
-          current?.id ===
-          updated.id
-            ? updated
-            : current,
-      );
-
-      setSuccess(
-        `Publication #${updated.id} annulée avec succès.`,
-      );
-
-      setPublicationToCancel(
-        null,
-      );
-    } catch (exception) {
-      setError(
-        getErrorMessage(
-          exception,
-        ),
-      );
-    } finally {
-      setCancellingId(
-        null,
-      );
-    }
-  };
+        );
+      } finally {
+        setCancellingId(
+          null,
+        );
+      }
+    };
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -724,20 +778,24 @@ const handleCancelPublication =
 
   if (isLoading) {
     return (
-      <div className="
-        min-h-[60vh]
-        flex
-        items-center
-        justify-center
-      ">
-        <div className="
+      <div
+        className="
           flex
-          flex-col
+          min-h-[60vh]
           items-center
-          gap-3
-          text-slate-500
-          dark:text-slate-400
-        ">
+          justify-center
+        "
+      >
+        <div
+          className="
+            flex
+            flex-col
+            items-center
+            gap-3
+            text-slate-500
+            dark:text-slate-400
+          "
+        >
           <LoaderCircle
             className="
               h-8
@@ -748,8 +806,8 @@ const handleCancelPublication =
           />
 
           <p className="text-sm">
-            Chargement du
-            tableau de bord...
+            Chargement du tableau
+            de bord...
           </p>
         </div>
       </div>
@@ -758,30 +816,36 @@ const handleCancelPublication =
 
   return (
     <div className="space-y-6">
-      <div className="
-        flex
-        flex-col
-        gap-3
-        sm:flex-row
-        sm:items-center
-        sm:justify-between
-      ">
+      <div
+        className="
+          flex
+          flex-col
+          gap-3
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
         <div>
-          <h1 className="
-            text-2xl
-            font-bold
-            text-slate-800
-            dark:text-white
-          ">
+          <h1
+            className="
+              text-2xl
+              font-bold
+              text-slate-800
+              dark:text-white
+            "
+          >
             Tableau de bord
           </h1>
 
-          <p className="
-            mt-1
-            text-sm
-            text-slate-500
-            dark:text-slate-400
-          ">
+          <p
+            className="
+              mt-1
+              text-sm
+              text-slate-500
+              dark:text-slate-400
+            "
+          >
             Données synchronisées
             avec Publication API.
           </p>
@@ -789,32 +853,37 @@ const handleCancelPublication =
 
         <button
           type="button"
-          onClick={handleRetry}
+          onClick={
+            handleRetry
+          }
           className="
             inline-flex
+            w-full
             items-center
             justify-center
             gap-2
             rounded-xl
             border
             border-slate-200
-            dark:border-slate-700
             bg-white
-            dark:bg-slate-800
             px-4
             py-2.5
             text-sm
             font-medium
             text-slate-700
-            dark:text-slate-200
-            hover:bg-slate-50
-            dark:hover:bg-slate-700
             transition-colors
+            hover:bg-slate-50
+            dark:border-slate-700
+            dark:bg-slate-800
+            dark:text-slate-200
+            dark:hover:bg-slate-700
+            sm:w-auto
           "
         >
           <RefreshCw
             size={16}
           />
+
           Actualiser
         </button>
       </div>
@@ -824,24 +893,28 @@ const handleCancelPublication =
           role="alert"
           className="
             flex
-            items-start
-            justify-between
-            gap-4
+            flex-col
+            gap-3
             rounded-xl
             border
             border-rose-200
-            dark:border-rose-900
             bg-rose-50
-            dark:bg-rose-950/30
             px-4
             py-3
+            dark:border-rose-900
+            dark:bg-rose-950/30
+            sm:flex-row
+            sm:items-start
+            sm:justify-between
           "
         >
-          <div className="
-            flex
-            items-start
-            gap-3
-          ">
+          <div
+            className="
+              flex
+              items-start
+              gap-3
+            "
+          >
             <AlertCircle
               className="
                 mt-0.5
@@ -853,36 +926,42 @@ const handleCancelPublication =
             />
 
             <div>
-              <p className="
-                text-sm
-                font-semibold
-                text-rose-800
-                dark:text-rose-300
-              ">
-                Erreur de chargement
+              <p
+                className="
+                  text-sm
+                  font-semibold
+                  text-rose-800
+                  dark:text-rose-300
+                "
+              >
+                Erreur
               </p>
 
-              <p className="
-                mt-1
-                text-sm
-                text-rose-700
-                dark:text-rose-400
-              ">
+              <p
+                className="
+                  mt-1
+                  text-sm
+                  text-rose-700
+                  dark:text-rose-400
+                "
+              >
                 {error}
-
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={handleRetry}
+            onClick={
+              handleRetry
+            }
             className="
+              self-start
               text-sm
               font-semibold
               text-rose-700
-              dark:text-rose-300
               hover:underline
+              dark:text-rose-300
             "
           >
             Réessayer
@@ -890,46 +969,48 @@ const handleCancelPublication =
         </div>
       )}
 
-{success && (
-  <div
-    role="status"
-    className="
-      flex
-      items-start
-      gap-3
-      rounded-xl
-      border
-      border-emerald-200
-      dark:border-emerald-900
-      bg-emerald-50
-      dark:bg-emerald-950/30
-      px-4
-      py-3
-      text-emerald-700
-      dark:text-emerald-300
-    "
-  >
-    <CheckCircle2
-      size={19}
-      className="
-        mt-0.5
-        shrink-0
-      "
-    />
+      {success && (
+        <div
+          role="status"
+          className="
+            flex
+            items-start
+            gap-3
+            rounded-xl
+            border
+            border-emerald-200
+            bg-emerald-50
+            px-4
+            py-3
+            text-emerald-700
+            dark:border-emerald-900
+            dark:bg-emerald-950/30
+            dark:text-emerald-300
+          "
+        >
+          <CheckCircle2
+            size={19}
+            className="
+              mt-0.5
+              shrink-0
+            "
+          />
 
-    <p className="text-sm">
-      {success}
-    </p>
-  </div>
-)}
+          <p className="text-sm">
+            {success}
+          </p>
+        </div>
+      )}
 
-      <div className="
-        grid
-        grid-cols-1
-        gap-4
-        sm:grid-cols-2
-        xl:grid-cols-4
-      ">
+      <div
+        className="
+          grid
+          grid-cols-1
+          gap-4
+          sm:grid-cols-2
+          xl:grid-cols-4
+        "
+      >
         <KpiCard
           label="Publications"
           value={
@@ -971,66 +1052,81 @@ const handleCancelPublication =
         />
       </div>
 
-      <div className="
-        grid
-        grid-cols-1
-        gap-4
-        xl:grid-cols-2
-      ">
-        <section className="
-          rounded-2xl
-          border
-          border-slate-200/80
-          dark:border-slate-700/60
-          bg-white
-          dark:bg-slate-800
-          p-5
-          shadow-sm
-        ">
-          <div className="
-            mb-4
-            flex
-            items-center
-            gap-3
-          ">
-            <div className="
-              rounded-xl
-              bg-indigo-50
-              dark:bg-indigo-950/40
-              p-2.5
-              text-indigo-600
-              dark:text-indigo-400
-            ">
+      <div
+        className="
+          grid
+          grid-cols-1
+          gap-4
+          xl:grid-cols-2
+        "
+      >
+        <section
+          className="
+            rounded-2xl
+            border
+            border-slate-200/80
+            bg-white
+            p-5
+            shadow-sm
+            dark:border-slate-700/60
+            dark:bg-slate-800
+          "
+        >
+          <div
+            className="
+              mb-4
+              flex
+              items-center
+              gap-3
+            "
+          >
+            <div
+              className="
+                rounded-xl
+                bg-indigo-50
+                p-2.5
+                text-indigo-600
+                dark:bg-indigo-950/40
+                dark:text-indigo-400
+              "
+            >
               <FileText
                 size={20}
               />
             </div>
 
             <div>
-              <h2 className="
-                font-semibold
-                text-slate-900
-                dark:text-white
-              ">
+              <h2
+                className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                "
+              >
                 Contenus
               </h2>
 
-              <p className="
-                text-xs
-                text-slate-500
-                dark:text-slate-400
-              ">
+              <p
+                className="
+                  text-xs
+                  text-slate-500
+                  dark:text-slate-400
+                "
+              >
                 État de préparation
                 des contenus
               </p>
             </div>
           </div>
 
-          <div className="
-            grid
-            grid-cols-3
-            gap-3
-          ">
+          <div
+            className="
+              grid
+              grid-cols-3
+              gap-2
+              sm:gap-3
+            "
+          >
             <ContentMetric
               label="Total"
               value={
@@ -1054,59 +1150,71 @@ const handleCancelPublication =
           </div>
         </section>
 
-        <section className="
-          rounded-2xl
-          border
-          border-slate-200/80
-          dark:border-slate-700/60
-          bg-white
-          dark:bg-slate-800
-          p-5
-          shadow-sm
-        ">
-          <div className="
-            mb-4
-            flex
-            items-center
-            gap-3
-          ">
-            <div className="
-              rounded-xl
-              bg-indigo-50
-              dark:bg-indigo-950/40
-              p-2.5
-              text-indigo-600
-              dark:text-indigo-400
-            ">
+        <section
+          className="
+            rounded-2xl
+            border
+            border-slate-200/80
+            bg-white
+            p-5
+            shadow-sm
+            dark:border-slate-700/60
+            dark:bg-slate-800
+          "
+        >
+          <div
+            className="
+              mb-4
+              flex
+              items-center
+              gap-3
+            "
+          >
+            <div
+              className="
+                rounded-xl
+                bg-indigo-50
+                p-2.5
+                text-indigo-600
+                dark:bg-indigo-950/40
+                dark:text-indigo-400
+              "
+            >
               <Link2
                 size={20}
               />
             </div>
 
             <div>
-              <h2 className="
-                font-semibold
-                text-slate-900
-                dark:text-white
-              ">
+              <h2
+                className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                "
+              >
                 Comptes connectés
               </h2>
 
-              <p className="
-                text-xs
-                text-slate-500
-                dark:text-slate-400
-              ">
+              <p
+                className="
+                  text-xs
+                  text-slate-500
+                  dark:text-slate-400
+                "
+              >
                 État des intégrations
               </p>
             </div>
           </div>
 
-          <div className="
-            grid
-            gap-3
-            sm:grid-cols-2
-          ">
+          <div
+            className="
+              grid
+              gap-3
+              sm:grid-cols-2
+            "
+          >
             <AccountIndicator
               name="LinkedIn"
               account={
@@ -1128,32 +1236,40 @@ const handleCancelPublication =
         </section>
       </div>
 
-      <section className="
-        rounded-2xl
-        border
-        border-slate-200/80
-        dark:border-slate-700/60
-        bg-white
-        dark:bg-slate-800
-        shadow-sm
-        overflow-hidden
-      ">
-        <div className="
-          p-4
-          space-y-3
-        ">
-          <div className="
-            flex
-            flex-col
-            gap-3
-            lg:flex-row
-            lg:items-center
-            lg:justify-between
-          ">
-            <div className="
-              relative
-              flex-1
-            ">
+      <section
+        className="
+          overflow-hidden
+          rounded-2xl
+          border
+          border-slate-200/80
+          bg-white
+          shadow-sm
+          dark:border-slate-700/60
+          dark:bg-slate-800
+        "
+      >
+        <div
+          className="
+            space-y-3
+            p-4
+          "
+        >
+          <div
+            className="
+              flex
+              flex-col
+              gap-3
+              lg:flex-row
+              lg:items-center
+              lg:justify-between
+            "
+          >
+            <div
+              className="
+                relative
+                flex-1
+              "
+            >
               <Search
                 className="
                   absolute
@@ -1189,25 +1305,26 @@ const handleCancelPublication =
                   rounded-xl
                   border
                   border-slate-200
-                  dark:border-slate-700
                   bg-slate-50
-                  dark:bg-slate-900
                   py-2.5
                   pl-10
                   pr-10
                   text-sm
                   text-slate-800
-                  dark:text-white
                   outline-none
                   focus:border-indigo-500
                   focus:ring-2
                   focus:ring-indigo-500/20
+                  dark:border-slate-700
+                  dark:bg-slate-900
+                  dark:text-white
                 "
               />
 
               {searchQuery && (
                 <button
                   type="button"
+                  aria-label="Effacer la recherche"
                   onClick={() => {
                     setSearchQuery(
                       '',
@@ -1234,33 +1351,43 @@ const handleCancelPublication =
               )}
             </div>
 
-            <div className="
-              flex
-              flex-wrap
-              items-center
-              gap-2
-            ">
-              <div className="
-                flex
-                items-center
+            <div
+              className="
+                grid
+                grid-cols-1
                 gap-2
-                rounded-xl
-                border
-                border-slate-200
-                dark:border-slate-700
-                bg-slate-50
-                dark:bg-slate-900
-                px-3
-                py-2
-              ">
+                sm:flex
+                sm:flex-wrap
+                sm:items-center
+              "
+            >
+              <div
+                className="
+                  flex
+                  w-full
+                  items-center
+                  gap-2
+                  rounded-xl
+                  border
+                  border-slate-200
+                  bg-slate-50
+                  px-3
+                  py-2
+                  dark:border-slate-700
+                  dark:bg-slate-900
+                  sm:w-auto
+                "
+              >
                 <Filter
                   size={14}
                   className="
+                    shrink-0
                     text-slate-400
                   "
                 />
 
                 <select
+                  aria-label="Filtrer par statut"
                   value={
                     selectedStatus
                   }
@@ -1277,12 +1404,14 @@ const handleCancelPublication =
                     );
                   }}
                   className="
+                    w-full
                     bg-transparent
                     text-xs
                     font-medium
                     text-slate-700
-                    dark:text-slate-300
                     outline-none
+                    dark:text-slate-300
+                    sm:w-auto
                   "
                 >
                   <option value="ALL">
@@ -1311,6 +1440,7 @@ const handleCancelPublication =
               </div>
 
               <select
+                aria-label="Filtrer par plateforme"
                 value={
                   selectedDestination
                 }
@@ -1327,19 +1457,21 @@ const handleCancelPublication =
                   );
                 }}
                 className="
+                  w-full
                   rounded-xl
                   border
                   border-slate-200
-                  dark:border-slate-700
                   bg-slate-50
-                  dark:bg-slate-900
                   px-3
                   py-2
                   text-xs
                   font-medium
                   text-slate-700
-                  dark:text-slate-300
                   outline-none
+                  dark:border-slate-700
+                  dark:bg-slate-900
+                  dark:text-slate-300
+                  sm:w-auto
                 "
               >
                 <option value="ALL">
@@ -1366,14 +1498,17 @@ const handleCancelPublication =
                     resetFilters
                   }
                   className="
+                    w-full
                     rounded-xl
                     px-3
-                    py-2
+                    py-2.5
                     text-xs
                     font-medium
                     text-rose-600
+                    transition-colors
                     hover:bg-rose-50
                     dark:hover:bg-rose-950/30
+                    sm:w-auto
                   "
                 >
                   Réinitialiser
@@ -1391,7 +1526,9 @@ const handleCancelPublication =
                 }
                 className="
                   inline-flex
+                  w-full
                   items-center
+                  justify-center
                   gap-2
                   rounded-xl
                   bg-indigo-600
@@ -1404,31 +1541,35 @@ const handleCancelPublication =
                   hover:bg-indigo-700
                   disabled:cursor-not-allowed
                   disabled:opacity-50
+                  sm:w-auto
                 "
               >
                 <Download
                   size={16}
                 />
+
                 Exporter CSV
               </button>
             </div>
           </div>
 
-          <div className="
-            flex
-            flex-col
-            gap-2
-            border-t
-            border-slate-100
-            dark:border-slate-700/40
-            pt-3
-            text-xs
-            text-slate-500
-            dark:text-slate-400
-            sm:flex-row
-            sm:items-center
-            sm:justify-between
-          ">
+          <div
+            className="
+              flex
+              flex-col
+              gap-2
+              border-t
+              border-slate-100
+              pt-3
+              text-xs
+              text-slate-500
+              dark:border-slate-700/40
+              dark:text-slate-400
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+            "
+          >
             <span>
               Affichage de{' '}
               <strong>
@@ -1446,16 +1587,19 @@ const handleCancelPublication =
               </strong>
             </span>
 
-            <div className="
-              flex
-              items-center
-              gap-2
-            ">
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+              "
+            >
               <span>
                 Éléments par page :
               </span>
 
               <select
+                aria-label="Éléments par page"
                 value={
                   itemsPerPage
                 }
@@ -1477,20 +1621,22 @@ const handleCancelPublication =
                   rounded-lg
                   border
                   border-slate-200
-                  dark:border-slate-700
                   bg-slate-50
-                  dark:bg-slate-900
                   px-2
                   py-1
                   outline-none
+                  dark:border-slate-700
+                  dark:bg-slate-900
                 "
               >
                 <option value={5}>
                   5
                 </option>
+
                 <option value={10}>
                   10
                 </option>
+
                 <option value={20}>
                   20
                 </option>
@@ -1499,62 +1645,348 @@ const handleCancelPublication =
           </div>
         </div>
 
-        <div className="
-          overflow-x-auto
-          border-t
-          border-slate-200
-          dark:border-slate-700
-        ">
-          <table className="
-            min-w-full
-            text-left
-            text-sm
-          ">
-            <thead className="
-              bg-slate-50
-              dark:bg-slate-900/70
-              text-xs
-              uppercase
-              tracking-wide
-              text-slate-500
-              dark:text-slate-400
-            ">
+        {/* Mobile cards */}
+        <div
+          className="
+            border-t
+            border-slate-200
+            dark:border-slate-700
+            md:hidden
+          "
+        >
+          {paginatedPublications.length >
+          0 ? (
+            <div
+              className="
+                divide-y
+                divide-slate-100
+                dark:divide-slate-700
+              "
+            >
+              {paginatedPublications.map(
+                (
+                  publication,
+                ) => (
+                  <article
+                    key={
+                      publication.id
+                    }
+                    className="
+                      space-y-4
+                      p-4
+                    "
+                  >
+                    <div
+                      className="
+                        flex
+                        items-start
+                        justify-between
+                        gap-3
+                      "
+                    >
+                      <div
+                        className="
+                          min-w-0
+                          flex-1
+                        "
+                      >
+                        <h3
+                          className="
+                            break-words
+                            text-sm
+                            font-semibold
+                            leading-5
+                            text-slate-900
+                            dark:text-white
+                          "
+                        >
+                          {publication.title ||
+                            'Sans titre'}
+                        </h3>
+
+                        <p
+                          className="
+                            mt-1
+                            text-xs
+                            text-slate-400
+                          "
+                        >
+                          #
+                          {
+                            publication.id
+                          }
+                          {' · '}
+                          contenu #
+                          {
+                            publication.contentId
+                          }
+                        </p>
+                      </div>
+
+                      <StatusBadge
+                        status={
+                          publication.status
+                        }
+                      />
+                    </div>
+
+                    <div
+                      className="
+                        grid
+                        grid-cols-2
+                        gap-3
+                        rounded-xl
+                        bg-slate-50
+                        p-3
+                        text-xs
+                        dark:bg-slate-900/50
+                      "
+                    >
+                      <MobileMetric
+                        label="Destination"
+                        value={destinationLabel(
+                          publication.destination,
+                        )}
+                      />
+
+                      <MobileMetric
+                        label="Planifiée"
+                        value={formatDate(
+                          publication.scheduledAt,
+                        )}
+                      />
+
+                      <div
+                        className="
+                          col-span-2
+                        "
+                      >
+                        <MobileMetric
+                          label="Publiée"
+                          value={formatDate(
+                            publication.publishedAt,
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      className="
+                        flex
+                        flex-col
+                        gap-2
+                        sm:flex-row
+                      "
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedPublication(
+                            publication,
+                          )
+                        }
+                        className="
+                          inline-flex
+                          flex-1
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-xl
+                          border
+                          border-slate-200
+                          px-3
+                          py-2.5
+                          text-xs
+                          font-medium
+                          text-slate-700
+                          transition-colors
+                          hover:bg-slate-50
+                          dark:border-slate-700
+                          dark:text-slate-200
+                          dark:hover:bg-slate-700
+                        "
+                      >
+                        <Eye
+                          size={15}
+                        />
+
+                        Détails
+                      </button>
+
+                      {canCancelPublication(
+                        publication,
+                      ) && (
+                        <button
+                          type="button"
+                          disabled={
+                            cancellingId ===
+                            publication.id
+                          }
+                          onClick={() =>
+                            setPublicationToCancel(
+                              publication,
+                            )
+                          }
+                          className="
+                            inline-flex
+                            flex-1
+                            items-center
+                            justify-center
+                            gap-2
+                            rounded-xl
+                            border
+                            border-rose-200
+                            px-3
+                            py-2.5
+                            text-xs
+                            font-medium
+                            text-rose-600
+                            transition-colors
+                            hover:bg-rose-50
+                            disabled:opacity-50
+                            dark:border-rose-900
+                            dark:text-rose-400
+                            dark:hover:bg-rose-950/30
+                          "
+                        >
+                          {cancellingId ===
+                          publication.id ? (
+                            <LoaderCircle
+                              size={
+                                15
+                              }
+                              className="
+                                animate-spin
+                              "
+                            />
+                          ) : (
+                            <Ban
+                              size={
+                                15
+                              }
+                            />
+                          )}
+
+                          Annuler
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ),
+              )}
+            </div>
+          ) : (
+            <div
+              className="
+                px-6
+                py-12
+                text-center
+                text-sm
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              Aucune publication ne
+              correspond aux critères.
+            </div>
+          )}
+        </div>
+
+        {/* Desktop / tablet table */}
+        <div
+          className="
+            hidden
+            overflow-x-auto
+            border-t
+            border-slate-200
+            dark:border-slate-700
+            md:block
+          "
+        >
+          <table
+            className="
+              min-w-[1000px]
+              w-full
+              text-left
+              text-sm
+            "
+          >
+            <thead
+              className="
+                bg-slate-50
+                text-xs
+                uppercase
+                tracking-wide
+                text-slate-500
+                dark:bg-slate-900/70
+                dark:text-slate-400
+              "
+            >
               <tr>
-                <th className="px-5 py-3">
+                <th
+                  className="
+                    px-5
+                    py-3
+                  "
+                >
                   Publication
                 </th>
 
-                <th className="px-5 py-3">
+                <th
+                  className="
+                    px-5
+                    py-3
+                  "
+                >
                   Destination
                 </th>
 
-                <th className="px-5 py-3">
+                <th
+                  className="
+                    px-5
+                    py-3
+                  "
+                >
                   Statut
                 </th>
 
-                <th className="px-5 py-3">
+                <th
+                  className="
+                    px-5
+                    py-3
+                  "
+                >
                   Planifiée
                 </th>
 
-                <th className="px-5 py-3">
+                <th
+                  className="
+                    px-5
+                    py-3
+                  "
+                >
                   Publiée
                 </th>
 
-                <th className="
-                  px-5
-                  py-3
-                  text-right
-                  ">
+                <th
+                  className="
+                    px-5
+                    py-3
+                    text-right
+                  "
+                >
                   Actions
                 </th>
               </tr>
             </thead>
 
-            <tbody className="
-              divide-y
-              divide-slate-100
-              dark:divide-slate-700
-            ">
+            <tbody
+              className="
+                divide-y
+                divide-slate-100
+                dark:divide-slate-700
+              "
+            >
               {paginatedPublications.length >
               0 ? (
                 paginatedPublications.map(
@@ -1570,27 +2002,35 @@ const handleCancelPublication =
                         dark:hover:bg-slate-700/30
                       "
                     >
-                      <td className="
-                        px-5
-                        py-4
-                      ">
-                        <p className="
-                          max-w-md
-                          font-medium
-                          text-slate-900
-                          dark:text-white
-                        ">
-                          {
-                            publication.title
-                          }
+                      <td
+                        className="
+                          px-5
+                          py-4
+                        "
+                      >
+                        <p
+                          className="
+                            max-w-md
+                            font-medium
+                            text-slate-900
+                            dark:text-white
+                          "
+                        >
+                          {publication.title ||
+                            'Sans titre'}
                         </p>
 
-                        <p className="
-                          mt-1
-                          text-xs
-                          text-slate-400
-                        ">
-                          #{publication.id}
+                        <p
+                          className="
+                            mt-1
+                            text-xs
+                            text-slate-400
+                          "
+                        >
+                          #
+                          {
+                            publication.id
+                          }
                           {' · '}
                           contenu #
                           {
@@ -1599,80 +2039,74 @@ const handleCancelPublication =
                         </p>
                       </td>
 
-                      <td className="
-                        px-5
-                        py-4
-                        text-slate-600
-                        dark:text-slate-300
-                      ">
+                      <td
+                        className="
+                          px-5
+                          py-4
+                          text-slate-600
+                          dark:text-slate-300
+                        "
+                      >
                         {destinationLabel(
                           publication.destination,
                         )}
                       </td>
 
-                      <td className="
-                        px-5
-                        py-4
-                      ">
-                        <span
-                          className={`
-                            inline-flex
-                            rounded-full
-                            border
-                            px-2.5
-                            py-1
-                            text-xs
-                            font-semibold
-                            ${
-                              STATUS_STYLES[
-                                publication
-                                  .status
-                              ] ||
-                              'bg-slate-100 text-slate-700 border-slate-200'
-                            }
-                          `}
-                        >
-                          {STATUS_LABELS[
-                            publication
-                              .status
-                          ] ||
-                            publication.status}
-                        </span>
+                      <td
+                        className="
+                          px-5
+                          py-4
+                        "
+                      >
+                        <StatusBadge
+                          status={
+                            publication.status
+                          }
+                        />
                       </td>
 
-                      <td className="
-                        whitespace-nowrap
-                        px-5
-                        py-4
-                        text-slate-600
-                        dark:text-slate-300
-                      ">
+                      <td
+                        className="
+                          whitespace-nowrap
+                          px-5
+                          py-4
+                          text-slate-600
+                          dark:text-slate-300
+                        "
+                      >
                         {formatDate(
                           publication.scheduledAt,
                         )}
                       </td>
 
-                      <td className="
-                        whitespace-nowrap
-                        px-5
-                        py-4
-                        text-slate-600
-                        dark:text-slate-300
-                      ">
+                      <td
+                        className="
+                          whitespace-nowrap
+                          px-5
+                          py-4
+                          text-slate-600
+                          dark:text-slate-300
+                        "
+                      >
                         {formatDate(
                           publication.publishedAt,
                         )}
                       </td>
-                      <td className="
-                        px-5
-                        py-4
-                      ">
-                        <div className="
-                          flex
-                          items-center
-                          justify-end
-                          gap-2
-                        ">
+
+                      <td
+                        className="
+                          px-5
+                          py-4
+                        "
+                      >
+                        <div
+                          className="
+                            flex
+                            items-center
+                            justify-end
+                            gap-2
+                          "
+                        >
                           <button
                             type="button"
                             onClick={() =>
@@ -1687,27 +2121,28 @@ const handleCancelPublication =
                               rounded-lg
                               border
                               border-slate-200
-                              dark:border-slate-700
                               px-3
                               py-2
                               text-xs
                               font-medium
                               text-slate-700
-                              dark:text-slate-200
                               hover:bg-slate-50
+                              dark:border-slate-700
+                              dark:text-slate-200
                               dark:hover:bg-slate-700
                             "
-                            title="Voir les détails"
                           >
-                            <Eye size={15} />
+                            <Eye
+                              size={
+                                15
+                              }
+                            />
+
                             Détails
                           </button>
 
-                          {[
-                            'PENDING',
-                            'SCHEDULED',
-                          ].includes(
-                            publication.status,
+                          {canCancelPublication(
+                            publication,
                           ) && (
                             <button
                               type="button"
@@ -1716,10 +2151,10 @@ const handleCancelPublication =
                                 publication.id
                               }
                               onClick={() =>
-  setPublicationToCancel(
-    publication,
-  )
-}
+                                setPublicationToCancel(
+                                  publication,
+                                )
+                              }
                               className="
                                 inline-flex
                                 items-center
@@ -1727,28 +2162,34 @@ const handleCancelPublication =
                                 rounded-lg
                                 border
                                 border-rose-200
-                                dark:border-rose-900
                                 px-3
                                 py-2
                                 text-xs
                                 font-medium
                                 text-rose-600
-                                dark:text-rose-400
                                 hover:bg-rose-50
-                                dark:hover:bg-rose-950/30
                                 disabled:opacity-50
+                                dark:border-rose-900
+                                dark:text-rose-400
+                                dark:hover:bg-rose-950/30
                               "
                             >
                               {cancellingId ===
                               publication.id ? (
                                 <LoaderCircle
-                                  size={15}
+                                  size={
+                                    15
+                                  }
                                   className="
                                     animate-spin
                                   "
                                 />
                               ) : (
-                                <Ban size={15} />
+                                <Ban
+                                  size={
+                                    15
+                                  }
+                                />
                               )}
 
                               Annuler
@@ -1771,8 +2212,8 @@ const handleCancelPublication =
                       dark:text-slate-400
                     "
                   >
-                    Aucune publication
-                    ne correspond aux
+                    Aucune publication ne
+                    correspond aux
                     critères.
                   </td>
                 </tr>
@@ -1781,21 +2222,28 @@ const handleCancelPublication =
           </table>
         </div>
 
-        <div className="
-          flex
-          items-center
-          justify-between
-          border-t
-          border-slate-200
-          dark:border-slate-700
-          px-4
-          py-3
-        ">
-          <p className="
-            text-xs
-            text-slate-500
-            dark:text-slate-400
-          ">
+        <div
+          className="
+            flex
+            flex-col
+            gap-3
+            border-t
+            border-slate-200
+            px-4
+            py-3
+            dark:border-slate-700
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+          <p
+            className="
+              text-xs
+              text-slate-500
+              dark:text-slate-400
+            "
+          >
             Page{' '}
             <strong>
               {displayedPage}
@@ -1806,15 +2254,18 @@ const handleCancelPublication =
             </strong>
           </p>
 
-          <div className="
-            flex
-            items-center
-            gap-1
-          ">
+          <div
+            className="
+              flex
+              items-center
+              gap-1
+            "
+          >
             <PaginationButton
               label="Première page"
               disabled={
-                displayedPage === 1
+                displayedPage ===
+                1
               }
               onClick={() =>
                 setCurrentPage(
@@ -1830,7 +2281,8 @@ const handleCancelPublication =
             <PaginationButton
               label="Page précédente"
               disabled={
-                displayedPage === 1
+                displayedPage ===
+                1
               }
               onClick={() =>
                 setCurrentPage(
@@ -1887,51 +2339,86 @@ const handleCancelPublication =
           </div>
         </div>
       </section>
+
       {selectedPublication && (
-  <PublicationDetailsModal
-    publication={
-      selectedPublication
-    }
-    cancelling={
-      cancellingId ===
-      selectedPublication.id
-    }
-    onCancel={(publication) =>
-  setPublicationToCancel(
-    publication,
-  )
-}
-    onClose={() =>
-      setSelectedPublication(
-        null,
-      )
-    }
-  />
-)}
-{publicationToCancel && (
-  <CancelPublicationModal
-    publication={
-      publicationToCancel
-    }
-    loading={
-      cancellingId ===
-      publicationToCancel.id
-    }
-    onClose={() =>
-      setPublicationToCancel(
-        null,
-      )
-    }
-    onConfirm={() =>
-      handleCancelPublication(
-        publicationToCancel,
-      )
-    }
-  />
-)}
+        <PublicationDetailsModal
+          publication={
+            selectedPublication
+          }
+          cancelling={
+            cancellingId ===
+            selectedPublication.id
+          }
+          onCancel={(
+            publication,
+          ) =>
+            setPublicationToCancel(
+              publication,
+            )
+          }
+          onClose={() =>
+            setSelectedPublication(
+              null,
+            )
+          }
+        />
+      )}
+
+      {publicationToCancel && (
+        <CancelPublicationModal
+          publication={
+            publicationToCancel
+          }
+          loading={
+            cancellingId ===
+            publicationToCancel.id
+          }
+          onClose={() =>
+            setPublicationToCancel(
+              null,
+            )
+          }
+          onConfirm={() =>
+            handleCancelPublication(
+              publicationToCancel,
+            )
+          }
+        />
+      )}
     </div>
   );
 }
+
+function MobileMetric({
+  label,
+  value,
+}) {
+  return (
+    <div>
+      <p
+        className="
+          text-slate-400
+          dark:text-slate-500
+        "
+      >
+        {label}
+      </p>
+
+      <p
+        className="
+          mt-1
+          break-words
+          font-medium
+          text-slate-700
+          dark:text-slate-200
+        "
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function CancelPublicationModal({
   publication,
   loading,
@@ -1951,10 +2438,12 @@ function CancelPublicationModal({
         p-4
         backdrop-blur-sm
       "
-      onMouseDown={(event) => {
+      onMouseDown={(
+        event,
+      ) => {
         if (
           event.target ===
-          event.currentTarget &&
+            event.currentTarget &&
           !loading
         ) {
           onClose();
@@ -1968,37 +2457,43 @@ function CancelPublicationModal({
         className="
           w-full
           max-w-md
+          overflow-hidden
           rounded-2xl
           border
           border-slate-200
-          dark:border-slate-700
           bg-white
-          dark:bg-slate-800
           shadow-2xl
+          dark:border-slate-700
+          dark:bg-slate-800
         "
       >
-        <div className="
-          flex
-          gap-4
-          p-6
-        ">
-          <div className="
+        <div
+          className="
             flex
-            h-11
-            w-11
-            shrink-0
-            items-center
-            justify-center
-            rounded-full
-            bg-rose-100
-            dark:bg-rose-950/50
-            text-rose-600
-            dark:text-rose-400
-          ">
+            gap-4
+            p-5
+            sm:p-6
+          "
+        >
+          <div
+            className="
+              flex
+              h-11
+              w-11
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-rose-100
+              text-rose-600
+              dark:bg-rose-950/50
+              dark:text-rose-400
+            "
+          >
             <Ban size={20} />
           </div>
 
-          <div>
+          <div className="min-w-0">
             <h2
               id="cancel-publication-title"
               className="
@@ -2008,34 +2503,40 @@ function CancelPublicationModal({
                 dark:text-white
               "
             >
-              Annuler la publication ?
+              Annuler la
+              publication ?
             </h2>
 
-            <p className="
-              mt-2
-              text-sm
-              leading-6
-              text-slate-500
-              dark:text-slate-400
-            ">
-              La publication
-              {' '}
+            <p
+              className="
+                mt-2
+                break-words
+                text-sm
+                leading-6
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              La publication{' '}
               <strong>
                 #{publication.id}
-              </strong>
-              {' '}
-              « {publication.title} »
-              sera annulée.
+              </strong>{' '}
+              «{' '}
+              {publication.title ||
+                'Sans titre'}{' '}
+              » sera annulée.
             </p>
 
             {publication.status ===
               'SCHEDULED' && (
-              <p className="
-                mt-2
-                text-sm
-                text-amber-600
-                dark:text-amber-400
-              ">
+              <p
+                className="
+                  mt-2
+                  text-sm
+                  text-amber-600
+                  dark:text-amber-400
+                "
+              >
                 Elle ne sera plus
                 publiée à la date
                 planifiée.
@@ -2044,16 +2545,22 @@ function CancelPublicationModal({
           </div>
         </div>
 
-        <div className="
-          flex
-          justify-end
-          gap-3
-          border-t
-          border-slate-200
-          dark:border-slate-700
-          px-6
-          py-4
-        ">
+        <div
+          className="
+            flex
+            flex-col-reverse
+            gap-2
+            border-t
+            border-slate-200
+            px-5
+            py-4
+            dark:border-slate-700
+            sm:flex-row
+            sm:justify-end
+            sm:gap-3
+            sm:px-6
+          "
+        >
           <button
             type="button"
             disabled={loading}
@@ -2062,16 +2569,16 @@ function CancelPublicationModal({
               rounded-xl
               border
               border-slate-200
-              dark:border-slate-700
               px-4
               py-2.5
               text-sm
               font-medium
               text-slate-700
-              dark:text-slate-200
               hover:bg-slate-50
-              dark:hover:bg-slate-700
               disabled:opacity-50
+              dark:border-slate-700
+              dark:text-slate-200
+              dark:hover:bg-slate-700
             "
           >
             Retour
@@ -2080,7 +2587,9 @@ function CancelPublicationModal({
           <button
             type="button"
             disabled={loading}
-            onClick={onConfirm}
+            onClick={
+              onConfirm
+            }
             className="
               inline-flex
               items-center
@@ -2110,7 +2619,10 @@ function CancelPublicationModal({
               </>
             ) : (
               <>
-                <Ban size={16} />
+                <Ban
+                  size={16}
+                />
+
                 Confirmer
               </>
             )}
@@ -2128,11 +2640,8 @@ function PublicationDetailsModal({
   onClose,
 }) {
   const canCancel =
-    [
-      'PENDING',
-      'SCHEDULED',
-    ].includes(
-      publication.status,
+    canCancelPublication(
+      publication,
     );
 
   return (
@@ -2145,8 +2654,9 @@ function PublicationDetailsModal({
         items-center
         justify-center
         bg-slate-950/60
-        p-4
+        p-3
         backdrop-blur-sm
+        sm:p-4
       "
       onMouseDown={(
         event,
@@ -2164,41 +2674,46 @@ function PublicationDetailsModal({
         aria-modal="true"
         aria-labelledby="publication-details-title"
         className="
+          max-h-[92vh]
           w-full
           max-w-2xl
-          max-h-[90vh]
           overflow-y-auto
           rounded-2xl
           border
           border-slate-200
-          dark:border-slate-700
           bg-white
-          dark:bg-slate-800
           shadow-2xl
+          dark:border-slate-700
+          dark:bg-slate-800
         "
       >
-        <div className="
-          flex
-          items-start
-          justify-between
-          gap-4
-          border-b
-          border-slate-200
-          dark:border-slate-700
-          px-6
-          py-5
-        ">
-          <div>
-            <p className="
-              text-xs
-              font-semibold
-              uppercase
-              tracking-wide
-              text-slate-500
-              dark:text-slate-400
-            ">
-              Publication
-              {' '}
+        <div
+          className="
+            flex
+            items-start
+            justify-between
+            gap-4
+            border-b
+            border-slate-200
+            px-4
+            py-4
+            dark:border-slate-700
+            sm:px-6
+            sm:py-5
+          "
+        >
+          <div className="min-w-0">
+            <p
+              className="
+                text-xs
+                font-semibold
+                uppercase
+                tracking-wide
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              Publication{' '}
               #{publication.id}
             </p>
 
@@ -2206,13 +2721,15 @@ function PublicationDetailsModal({
               id="publication-details-title"
               className="
                 mt-1
+                break-words
                 text-lg
                 font-bold
                 text-slate-900
                 dark:text-white
               "
             >
-              {publication.title}
+              {publication.title ||
+                'Sans titre'}
             </h2>
           </div>
 
@@ -2220,6 +2737,7 @@ function PublicationDetailsModal({
             type="button"
             onClick={onClose}
             className="
+              shrink-0
               rounded-lg
               p-2
               text-slate-500
@@ -2232,13 +2750,17 @@ function PublicationDetailsModal({
           </button>
         </div>
 
-        <div className="
-          grid
-          grid-cols-1
-          gap-4
-          p-6
-          sm:grid-cols-2
-        ">
+        <div
+          className="
+            grid
+            grid-cols-1
+            gap-3
+            p-4
+            sm:grid-cols-2
+            sm:gap-4
+            sm:p-6
+          "
+        >
           <DetailItem
             label="ID publication"
             value={
@@ -2314,35 +2836,41 @@ function PublicationDetailsModal({
             }
           />
 
-          <div className="
-            sm:col-span-2
-          ">
+          <div
+            className="
+              sm:col-span-2
+            "
+          >
             <DetailItem
               label="Message d’erreur"
               value={
                 publication.errorMessage ||
                 'Aucune erreur'
               }
-              error={
-                Boolean(
-                  publication.errorMessage,
-                )
-              }
+              error={Boolean(
+                publication.errorMessage,
+              )}
             />
           </div>
         </div>
 
-        <div className="
-          flex
-          items-center
-          justify-end
-          gap-3
-          border-t
-          border-slate-200
-          dark:border-slate-700
-          px-6
-          py-4
-        ">
+        <div
+          className="
+            flex
+            flex-col-reverse
+            gap-2
+            border-t
+            border-slate-200
+            px-4
+            py-4
+            dark:border-slate-700
+            sm:flex-row
+            sm:items-center
+            sm:justify-end
+            sm:gap-3
+            sm:px-6
+          "
+        >
           <button
             type="button"
             onClick={onClose}
@@ -2350,14 +2878,14 @@ function PublicationDetailsModal({
               rounded-xl
               border
               border-slate-200
-              dark:border-slate-700
               px-4
               py-2.5
               text-sm
               font-medium
               text-slate-700
-              dark:text-slate-200
               hover:bg-slate-50
+              dark:border-slate-700
+              dark:text-slate-200
               dark:hover:bg-slate-700
             "
           >
@@ -2367,7 +2895,9 @@ function PublicationDetailsModal({
           {canCancel && (
             <button
               type="button"
-              disabled={cancelling}
+              disabled={
+                cancelling
+              }
               onClick={() =>
                 onCancel(
                   publication,
@@ -2376,6 +2906,7 @@ function PublicationDetailsModal({
               className="
                 inline-flex
                 items-center
+                justify-center
                 gap-2
                 rounded-xl
                 bg-rose-600
@@ -2401,7 +2932,8 @@ function PublicationDetailsModal({
                 />
               )}
 
-              Annuler la publication
+              Annuler la
+              publication
             </button>
           )}
         </div>
@@ -2416,19 +2948,23 @@ function DetailItem({
   error = false,
 }) {
   return (
-    <div className="
-      rounded-xl
-      bg-slate-50
-      dark:bg-slate-900/50
-      px-4
-      py-3
-    ">
-      <p className="
-        text-xs
-        font-medium
-        text-slate-500
-        dark:text-slate-400
-      ">
+    <div
+      className="
+        rounded-xl
+        bg-slate-50
+        px-4
+        py-3
+        dark:bg-slate-900/50
+      "
+    >
+      <p
+        className="
+          text-xs
+          font-medium
+          text-slate-500
+          dark:text-slate-400
+        "
+      >
         {label}
       </p>
 
@@ -2498,28 +3034,32 @@ function KpiCard({
     variants.indigo;
 
   return (
-    <div className="
-      flex
-      items-center
-      justify-between
-      rounded-2xl
-      border
-      border-slate-200/80
-      dark:border-slate-700/60
-      bg-white
-      dark:bg-slate-800
-      p-5
-      shadow-sm
-    ">
+    <div
+      className="
+        flex
+        items-center
+        justify-between
+        rounded-2xl
+        border
+        border-slate-200/80
+        bg-white
+        p-5
+        shadow-sm
+        dark:border-slate-700/60
+        dark:bg-slate-800
+      "
+    >
       <div>
-        <p className="
-          text-xs
-          font-medium
-          uppercase
-          tracking-wider
-          text-slate-500
-          dark:text-slate-400
-        ">
+        <p
+          className="
+            text-xs
+            font-medium
+            uppercase
+            tracking-wider
+            text-slate-500
+            dark:text-slate-400
+          "
+        >
           {label}
         </p>
 
@@ -2558,29 +3098,39 @@ function ContentMetric({
   value,
 }) {
   return (
-    <div className="
-      rounded-xl
-      bg-slate-50
-      dark:bg-slate-900/50
-      px-3
-      py-3
-      text-center
-    ">
-      <p className="
-        text-xl
-        font-bold
-        text-slate-900
-        dark:text-white
-      ">
+    <div
+      className="
+        min-w-0
+        rounded-xl
+        bg-slate-50
+        px-2
+        py-3
+        text-center
+        dark:bg-slate-900/50
+        sm:px-3
+      "
+    >
+      <p
+        className="
+          text-xl
+          font-bold
+          text-slate-900
+          dark:text-white
+        "
+      >
         {value}
       </p>
 
-      <p className="
-        mt-1
-        text-xs
-        text-slate-500
-        dark:text-slate-400
-      ">
+      <p
+        className="
+          mt-1
+          break-words
+          text-[11px]
+          text-slate-500
+          dark:text-slate-400
+          sm:text-xs
+        "
+      >
         {label}
       </p>
     </div>
@@ -2601,20 +3151,20 @@ function PaginationButton({
       onClick={onClick}
       className="
         inline-flex
-        h-8
-        w-8
+        h-9
+        w-9
         items-center
         justify-center
         rounded-lg
         border
         border-slate-200
-        dark:border-slate-700
         text-slate-600
-        dark:text-slate-300
         hover:bg-slate-50
-        dark:hover:bg-slate-700
         disabled:cursor-not-allowed
         disabled:opacity-40
+        dark:border-slate-700
+        dark:text-slate-300
+        dark:hover:bg-slate-700
       "
     >
       {children}
