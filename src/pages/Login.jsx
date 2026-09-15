@@ -4,12 +4,8 @@ import {
 } from 'react';
 
 import {
-  Link,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
-
-import {
+  Eye,
+  EyeOff,
   LoaderCircle,
   Lock,
   LogIn,
@@ -18,6 +14,12 @@ import {
   Sparkles,
   Sun,
 } from 'lucide-react';
+
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 
 import useAuth from '../auth/useAuth';
 
@@ -52,6 +54,11 @@ export default function Login() {
     password,
     setPassword,
   ] = useState('');
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
   const [
     isLoading,
@@ -300,6 +307,7 @@ export default function Login() {
               <Mail
                 size={18}
                 className="
+                  pointer-events-none
                   absolute
                   left-3
                   top-1/2
@@ -370,6 +378,7 @@ export default function Login() {
               <Lock
                 size={18}
                 className="
+                  pointer-events-none
                   absolute
                   left-3
                   top-1/2
@@ -380,7 +389,11 @@ export default function Login() {
 
               <input
                 id="password"
-                type="password"
+                type={
+                  showPassword
+                    ? 'text'
+                    : 'password'
+                }
                 autoComplete="current-password"
                 value={
                   password
@@ -405,7 +418,7 @@ export default function Login() {
                   bg-transparent
                   py-2.5
                   pl-10
-                  pr-4
+                  pr-12
                   outline-none
                   focus:border-blue-500
                   focus:ring-2
@@ -415,6 +428,56 @@ export default function Login() {
                   dark:text-white
                 "
               />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPassword(
+                    (value) =>
+                      !value,
+                  )
+                }
+                disabled={
+                  isLoading
+                }
+                aria-label={
+                  showPassword
+                    ? 'Masquer le mot de passe'
+                    : 'Afficher le mot de passe'
+                }
+                aria-pressed={
+                  showPassword
+                }
+                className="
+                  absolute
+                  right-3
+                  top-1/2
+                  -translate-y-1/2
+                  rounded-md
+                  p-1
+                  text-gray-400
+                  transition-colors
+                  hover:text-gray-600
+                  focus:outline-none
+                  focus:ring-2
+                  focus:ring-blue-500
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                  dark:hover:text-gray-200
+                "
+              >
+                {showPassword ? (
+                  <EyeOff
+                    size={19}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Eye
+                    size={19}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
             </div>
           </div>
 

@@ -9,6 +9,8 @@ import {
 } from 'react-router-dom';
 
 import {
+  Eye,
+  EyeOff,
   LoaderCircle,
   Lock,
   Mail,
@@ -53,6 +55,16 @@ export default function Register() {
     confirmPassword,
     setConfirmPassword,
   ] = useState('');
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
+
+  const [
+    showConfirmPassword,
+    setShowConfirmPassword,
+  ] = useState(false);
 
   const [
     isLoading,
@@ -328,6 +340,15 @@ export default function Register() {
             disabled={
               isLoading
             }
+            showPassword={
+              showPassword
+            }
+            onTogglePassword={() =>
+              setShowPassword(
+                (value) =>
+                  !value,
+              )
+            }
           />
 
           <AuthInput
@@ -346,6 +367,15 @@ export default function Register() {
             maxLength={72}
             disabled={
               isLoading
+            }
+            showPassword={
+              showConfirmPassword
+            }
+            onTogglePassword={() =>
+              setShowConfirmPassword(
+                (value) =>
+                  !value,
+              )
             }
           />
 
@@ -429,7 +459,12 @@ function AuthInput({
   disabled,
   minLength,
   maxLength,
+  showPassword = false,
+  onTogglePassword,
 }) {
+  const isPassword =
+    type === 'password';
+
   return (
     <div>
       <label
@@ -454,6 +489,7 @@ function AuthInput({
         <Icon
           size={18}
           className="
+            pointer-events-none
             absolute
             left-3
             top-1/2
@@ -464,7 +500,12 @@ function AuthInput({
 
         <input
           id={id}
-          type={type}
+          type={
+            isPassword &&
+            showPassword
+              ? 'text'
+              : type
+          }
           autoComplete={
             autoComplete
           }
@@ -486,7 +527,7 @@ function AuthInput({
           disabled={
             disabled
           }
-          className="
+          className={`
             w-full
             rounded-lg
             border
@@ -494,7 +535,9 @@ function AuthInput({
             bg-transparent
             py-2.5
             pl-10
-            pr-4
+            ${isPassword
+              ? 'pr-12'
+              : 'pr-4'}
             outline-none
             focus:border-blue-500
             focus:ring-2
@@ -502,8 +545,57 @@ function AuthInput({
             disabled:opacity-60
             dark:border-gray-600
             dark:text-white
-          "
+          `}
         />
+
+        {isPassword && (
+          <button
+            type="button"
+            onClick={
+              onTogglePassword
+            }
+            disabled={
+              disabled
+            }
+            aria-label={
+              showPassword
+                ? 'Masquer le mot de passe'
+                : 'Afficher le mot de passe'
+            }
+            aria-pressed={
+              showPassword
+            }
+            className="
+              absolute
+              right-3
+              top-1/2
+              -translate-y-1/2
+              rounded-md
+              p-1
+              text-gray-400
+              transition-colors
+              hover:text-gray-600
+              focus:outline-none
+              focus:ring-2
+              focus:ring-blue-500
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+              dark:hover:text-gray-200
+            "
+          >
+            {showPassword ? (
+              <EyeOff
+                size={19}
+                aria-hidden="true"
+              />
+            ) : (
+              <Eye
+                size={19}
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
