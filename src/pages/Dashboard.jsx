@@ -22,16 +22,23 @@ import {
   Globe2,
   Link2,
   LoaderCircle,
+  Pencil,
   RefreshCw,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
+
+import {
+  useNavigate,
+} from 'react-router-dom';
 
 import {
   getAccounts,
 } from '../api/accounts';
 
 import {
+  deleteContent,
   getContents,
 } from '../api/contents';
 
@@ -61,19 +68,14 @@ const STATUS_LABELS = {
 const STATUS_STYLES = {
   PENDING:
     'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-
   SCHEDULED:
     'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
-
   PROCESSING:
     'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-
   PUBLISHED:
     'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-
   FAILED:
     'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-
   CANCELLED:
     'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
 };
@@ -87,10 +89,8 @@ const CONTENT_STATUS_LABELS = {
 const CONTENT_STATUS_STYLES = {
   DRAFT:
     'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
-
   READY:
     'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-
   ARCHIVED:
     'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400',
 };
@@ -99,7 +99,8 @@ function getErrorMessage(
   error,
 ) {
   return (
-    error.response?.data?.message ||
+    error.response?.data
+      ?.message ||
     error.message ||
     'Une erreur est survenue.'
   );
@@ -166,11 +167,9 @@ function connectionLabel(
     return 'Expiré';
   }
 
-  if (account.connected) {
-    return 'Connecté';
-  }
-
-  return 'Non connecté';
+  return account.connected
+    ? 'Connecté'
+    : 'Non connecté';
 }
 
 function canCancelPublication(
@@ -181,6 +180,15 @@ function canCancelPublication(
     'SCHEDULED',
   ].includes(
     publication.status,
+  );
+}
+
+function canModifyContent(
+  content,
+) {
+  return (
+    content.status !==
+    'ARCHIVED'
   );
 }
 
@@ -255,70 +263,20 @@ function AccountIndicator({
     'EXPIRED';
 
   return (
-    <div
-      className="
-        flex
-        min-w-0
-        items-center
-        justify-between
-        gap-3
-        rounded-xl
-        border
-        border-slate-200
-        bg-slate-50
-        px-4
-        py-3
-        dark:border-slate-700
-        dark:bg-slate-900/50
-      "
-    >
-      <div
-        className="
-          flex
-          min-w-0
-          items-center
-          gap-3
-        "
-      >
-        <div
-          className="
-            flex
-            h-9
-            w-9
-            shrink-0
-            items-center
-            justify-center
-            rounded-lg
-            border
-            border-slate-200
-            bg-white
-            dark:border-slate-700
-            dark:bg-slate-800
-          "
-        >
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
           <Icon size={18} />
         </div>
 
         <div className="min-w-0">
-          <p
-            className="
-              text-sm
-              font-semibold
-              text-slate-800
-              dark:text-white
-            "
-          >
+          <p className="text-sm font-semibold text-slate-800 dark:text-white">
             {name}
           </p>
 
           {account?.siteUrl && (
             <p
-              className="
-                truncate
-                text-xs
-                text-slate-500
-                dark:text-slate-400
-              "
+              className="truncate text-xs text-slate-500 dark:text-slate-400"
               title={
                 account.siteUrl
               }
@@ -356,6 +314,9 @@ function AccountIndicator({
 }
 
 export default function Dashboard() {
+  const navigate =
+    useNavigate();
+
   const [
     publications,
     setPublications,
@@ -441,6 +402,16 @@ export default function Dashboard() {
     setSelectedContent,
   ] = useState(null);
 
+  const [
+    contentToDelete,
+    setContentToDelete,
+  ] = useState(null);
+
+  const [
+    deletingContentId,
+    setDeletingContentId,
+  ] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -484,22 +455,18 @@ export default function Dashboard() {
       )
       .catch(
         (exception) => {
-          if (cancelled) {
-            return;
+          if (!cancelled) {
+            setError(
+              getErrorMessage(
+                exception,
+              ),
+            );
           }
-
-          setError(
-            getErrorMessage(
-              exception,
-            ),
-          );
         },
       )
       .finally(() => {
         if (!cancelled) {
-          setIsLoading(
-            false,
-          );
+          setIsLoading(false);
         }
       });
 
@@ -675,6 +642,80 @@ export default function Dashboard() {
         value + 1,
     );
   };
+
+  const handleEditContent = (
+    content,
+  ) => {
+    navigate(
+      `/editor?contentId=${content.id}`,
+    );
+  };
+
+  const handleDeleteContent =
+    async (content) => {
+      if (
+        !canModifyContent(
+          content,
+        )
+      ) {
+        return;
+      }
+
+      setError('');
+      setSuccess('');
+
+      setDeletingContentId(
+        content.id,
+      );
+
+      try {
+        await deleteContent(
+          content.id,
+        );
+
+        const refreshed =
+          await getContents();
+
+        setContents(
+          Array.isArray(
+            refreshed,
+          )
+            ? refreshed
+            : [],
+        );
+
+        setContentToDelete(
+          null,
+        );
+
+        if (
+          selectedContent?.id ===
+          content.id
+        ) {
+          setSelectedContent(
+            null,
+          );
+
+          setShowContents(
+            true,
+          );
+        }
+
+        setSuccess(
+          `Contenu #${content.id} supprimé ou archivé avec succès.`,
+        );
+      } catch (exception) {
+        setError(
+          getErrorMessage(
+            exception,
+          ),
+        );
+      } finally {
+        setDeletingContentId(
+          null,
+        );
+      }
+    };
 
   const handleCancelPublication =
     async (publication) => {
@@ -852,32 +893,9 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div
-        className="
-          flex
-          min-h-[60vh]
-          items-center
-          justify-center
-        "
-      >
-        <div
-          className="
-            flex
-            flex-col
-            items-center
-            gap-3
-            text-slate-500
-            dark:text-slate-400
-          "
-        >
-          <LoaderCircle
-            className="
-              h-8
-              w-8
-              animate-spin
-              text-indigo-600
-            "
-          />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-500 dark:text-slate-400">
+          <LoaderCircle className="h-8 w-8 animate-spin text-indigo-600" />
 
           <p className="text-sm">
             Chargement du tableau
@@ -890,36 +908,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div
-        className="
-          flex
-          flex-col
-          gap-3
-          sm:flex-row
-          sm:items-center
-          sm:justify-between
-        "
-      >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1
-            className="
-              text-2xl
-              font-bold
-              text-slate-800
-              dark:text-white
-            "
-          >
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
             Tableau de bord
           </h1>
 
-          <p
-            className="
-              mt-1
-              text-sm
-              text-slate-500
-              dark:text-slate-400
-            "
-          >
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Données synchronisées
             avec Publication API.
           </p>
@@ -930,29 +925,7 @@ export default function Dashboard() {
           onClick={
             handleRetry
           }
-          className="
-            inline-flex
-            w-full
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            border
-            border-slate-200
-            bg-white
-            px-4
-            py-2.5
-            text-sm
-            font-medium
-            text-slate-700
-            transition-colors
-            hover:bg-slate-50
-            dark:border-slate-700
-            dark:bg-slate-800
-            dark:text-slate-200
-            dark:hover:bg-slate-700
-            sm:w-auto
-          "
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:w-auto"
         >
           <RefreshCw
             size={16}
@@ -965,60 +938,17 @@ export default function Dashboard() {
       {error && (
         <div
           role="alert"
-          className="
-            flex
-            flex-col
-            gap-3
-            rounded-xl
-            border
-            border-rose-200
-            bg-rose-50
-            px-4
-            py-3
-            dark:border-rose-900
-            dark:bg-rose-950/30
-            sm:flex-row
-            sm:items-start
-            sm:justify-between
-          "
+          className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-900 dark:bg-rose-950/30 sm:flex-row sm:items-start sm:justify-between"
         >
-          <div
-            className="
-              flex
-              items-start
-              gap-3
-            "
-          >
-            <AlertCircle
-              className="
-                mt-0.5
-                h-5
-                w-5
-                shrink-0
-                text-rose-600
-              "
-            />
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
 
             <div>
-              <p
-                className="
-                  text-sm
-                  font-semibold
-                  text-rose-800
-                  dark:text-rose-300
-                "
-              >
+              <p className="text-sm font-semibold text-rose-800 dark:text-rose-300">
                 Erreur
               </p>
 
-              <p
-                className="
-                  mt-1
-                  text-sm
-                  text-rose-700
-                  dark:text-rose-400
-                "
-              >
+              <p className="mt-1 text-sm text-rose-700 dark:text-rose-400">
                 {error}
               </p>
             </div>
@@ -1029,14 +959,7 @@ export default function Dashboard() {
             onClick={
               handleRetry
             }
-            className="
-              self-start
-              text-sm
-              font-semibold
-              text-rose-700
-              hover:underline
-              dark:text-rose-300
-            "
+            className="self-start text-sm font-semibold text-rose-700 hover:underline dark:text-rose-300"
           >
             Réessayer
           </button>
@@ -1046,28 +969,11 @@ export default function Dashboard() {
       {success && (
         <div
           role="status"
-          className="
-            flex
-            items-start
-            gap-3
-            rounded-xl
-            border
-            border-emerald-200
-            bg-emerald-50
-            px-4
-            py-3
-            text-emerald-700
-            dark:border-emerald-900
-            dark:bg-emerald-950/30
-            dark:text-emerald-300
-          "
+          className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
         >
           <CheckCircle2
             size={19}
-            className="
-              mt-0.5
-              shrink-0
-            "
+            className="mt-0.5 shrink-0"
           />
 
           <p className="text-sm">
@@ -1076,15 +982,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div
-        className="
-          grid
-          grid-cols-1
-          gap-4
-          sm:grid-cols-2
-          xl:grid-cols-4
-        "
-      >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Publications"
           value={
@@ -1126,90 +1024,28 @@ export default function Dashboard() {
         />
       </div>
 
-      <div
-        className="
-          grid
-          grid-cols-1
-          gap-4
-          xl:grid-cols-2
-        "
-      >
-        <section
-          className="
-            rounded-2xl
-            border
-            border-slate-200/80
-            bg-white
-            p-5
-            shadow-sm
-            dark:border-slate-700/60
-            dark:bg-slate-800
-          "
-        >
-          <div
-            className="
-              mb-4
-              flex
-              items-center
-              justify-between
-              gap-4
-            "
-          >
-            <div
-              className="
-                flex
-                items-center
-                gap-3
-              "
-            >
-              <div
-                className="
-                  rounded-xl
-                  bg-indigo-50
-                  p-2.5
-                  text-indigo-600
-                  dark:bg-indigo-950/40
-                  dark:text-indigo-400
-                "
-              >
-                <FileText
-                  size={20}
-                />
-              </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-800">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+              <FileText
+                size={20}
+              />
+            </div>
 
-              <div>
-                <h2
-                  className="
-                    font-semibold
-                    text-slate-900
-                    dark:text-white
-                  "
-                >
-                  Contenus
-                </h2>
+            <div>
+              <h2 className="font-semibold text-slate-900 dark:text-white">
+                Contenus
+              </h2>
 
-                <p
-                  className="
-                    text-xs
-                    text-slate-500
-                    dark:text-slate-400
-                  "
-                >
-                  État de préparation
-                  des contenus
-                </p>
-              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                État de préparation
+                des contenus
+              </p>
             </div>
           </div>
 
-          <div
-            className="
-              grid
-              grid-cols-3
-              gap-2
-              sm:gap-3
-            "
-          >
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <ContentMetric
               label="Total"
               value={
@@ -1243,31 +1079,7 @@ export default function Dashboard() {
               contents.length ===
               0
             }
-            className="
-              mt-4
-              inline-flex
-              w-full
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              border
-              border-indigo-200
-              bg-indigo-50
-              px-4
-              py-2.5
-              text-sm
-              font-semibold
-              text-indigo-700
-              transition-colors
-              hover:bg-indigo-100
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-              dark:border-indigo-900
-              dark:bg-indigo-950/30
-              dark:text-indigo-300
-              dark:hover:bg-indigo-950/50
-            "
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
           >
             <BookOpen
               size={17}
@@ -1277,71 +1089,26 @@ export default function Dashboard() {
           </button>
         </section>
 
-        <section
-          className="
-            rounded-2xl
-            border
-            border-slate-200/80
-            bg-white
-            p-5
-            shadow-sm
-            dark:border-slate-700/60
-            dark:bg-slate-800
-          "
-        >
-          <div
-            className="
-              mb-4
-              flex
-              items-center
-              gap-3
-            "
-          >
-            <div
-              className="
-                rounded-xl
-                bg-indigo-50
-                p-2.5
-                text-indigo-600
-                dark:bg-indigo-950/40
-                dark:text-indigo-400
-              "
-            >
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-800">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="rounded-xl bg-indigo-50 p-2.5 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
               <Link2
                 size={20}
               />
             </div>
 
             <div>
-              <h2
-                className="
-                  font-semibold
-                  text-slate-900
-                  dark:text-white
-                "
-              >
+              <h2 className="font-semibold text-slate-900 dark:text-white">
                 Comptes connectés
               </h2>
 
-              <p
-                className="
-                  text-xs
-                  text-slate-500
-                  dark:text-slate-400
-                "
-              >
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 État des intégrations
               </p>
             </div>
           </div>
 
-          <div
-            className="
-              grid
-              gap-3
-              sm:grid-cols-2
-            "
-          >
+          <div className="grid gap-3 sm:grid-cols-2">
             <AccountIndicator
               name="LinkedIn"
               account={
@@ -1363,51 +1130,11 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <section
-        className="
-          overflow-hidden
-          rounded-2xl
-          border
-          border-slate-200/80
-          bg-white
-          shadow-sm
-          dark:border-slate-700/60
-          dark:bg-slate-800
-        "
-      >
-        <div
-          className="
-            space-y-3
-            p-4
-          "
-        >
-          <div
-            className="
-              flex
-              flex-col
-              gap-3
-              lg:flex-row
-              lg:items-center
-              lg:justify-between
-            "
-          >
-            <div
-              className="
-                relative
-                flex-1
-              "
-            >
-              <Search
-                className="
-                  absolute
-                  left-3.5
-                  top-1/2
-                  h-4
-                  w-4
-                  -translate-y-1/2
-                  text-slate-400
-                "
-              />
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-800">
+        <div className="space-y-3 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
               <input
                 type="text"
@@ -1427,25 +1154,7 @@ export default function Dashboard() {
                     1,
                   );
                 }}
-                className="
-                  w-full
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-slate-50
-                  py-2.5
-                  pl-10
-                  pr-10
-                  text-sm
-                  text-slate-800
-                  outline-none
-                  focus:border-indigo-500
-                  focus:ring-2
-                  focus:ring-indigo-500/20
-                  dark:border-slate-700
-                  dark:bg-slate-900
-                  dark:text-white
-                "
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
 
               {searchQuery && (
@@ -1461,15 +1170,7 @@ export default function Dashboard() {
                       1,
                     );
                   }}
-                  className="
-                    absolute
-                    right-3
-                    top-1/2
-                    -translate-y-1/2
-                    text-slate-400
-                    hover:text-slate-600
-                    dark:hover:text-slate-200
-                  "
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                 >
                   <X
                     size={16}
@@ -1478,39 +1179,11 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div
-              className="
-                grid
-                grid-cols-1
-                gap-2
-                sm:flex
-                sm:flex-wrap
-                sm:items-center
-              "
-            >
-              <div
-                className="
-                  flex
-                  w-full
-                  items-center
-                  gap-2
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-slate-50
-                  px-3
-                  py-2
-                  dark:border-slate-700
-                  dark:bg-slate-900
-                  sm:w-auto
-                "
-              >
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900 sm:w-auto">
                 <Filter
                   size={14}
-                  className="
-                    shrink-0
-                    text-slate-400
-                  "
+                  className="shrink-0 text-slate-400"
                 />
 
                 <select
@@ -1530,16 +1203,7 @@ export default function Dashboard() {
                       1,
                     );
                   }}
-                  className="
-                    w-full
-                    bg-transparent
-                    text-xs
-                    font-medium
-                    text-slate-700
-                    outline-none
-                    dark:text-slate-300
-                    sm:w-auto
-                  "
+                  className="w-full bg-transparent text-xs font-medium text-slate-700 outline-none dark:text-slate-300 sm:w-auto"
                 >
                   <option value="ALL">
                     Tous les statuts
@@ -1583,23 +1247,7 @@ export default function Dashboard() {
                     1,
                   );
                 }}
-                className="
-                  w-full
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-slate-50
-                  px-3
-                  py-2
-                  text-xs
-                  font-medium
-                  text-slate-700
-                  outline-none
-                  dark:border-slate-700
-                  dark:bg-slate-900
-                  dark:text-slate-300
-                  sm:w-auto
-                "
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:w-auto"
               >
                 <option value="ALL">
                   Toutes les plateformes
@@ -1624,19 +1272,7 @@ export default function Dashboard() {
                   onClick={
                     resetFilters
                   }
-                  className="
-                    w-full
-                    rounded-xl
-                    px-3
-                    py-2.5
-                    text-xs
-                    font-medium
-                    text-rose-600
-                    transition-colors
-                    hover:bg-rose-50
-                    dark:hover:bg-rose-950/30
-                    sm:w-auto
-                  "
+                  className="w-full rounded-xl px-3 py-2.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/30 sm:w-auto"
                 >
                   Réinitialiser
                 </button>
@@ -1651,25 +1287,7 @@ export default function Dashboard() {
                 onClick={
                   handleExportCSV
                 }
-                className="
-                  inline-flex
-                  w-full
-                  items-center
-                  justify-center
-                  gap-2
-                  rounded-xl
-                  bg-indigo-600
-                  px-4
-                  py-2.5
-                  text-xs
-                  font-semibold
-                  text-white
-                  transition
-                  hover:bg-indigo-700
-                  disabled:cursor-not-allowed
-                  disabled:opacity-50
-                  sm:w-auto
-                "
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
               >
                 <Download
                   size={16}
@@ -1680,23 +1298,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div
-            className="
-              flex
-              flex-col
-              gap-2
-              border-t
-              border-slate-100
-              pt-3
-              text-xs
-              text-slate-500
-              dark:border-slate-700/40
-              dark:text-slate-400
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-            "
-          >
+          <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-700/40 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
             <span>
               Affichage de{' '}
               <strong>
@@ -1714,13 +1316,7 @@ export default function Dashboard() {
               </strong>
             </span>
 
-            <div
-              className="
-                flex
-                items-center
-                gap-2
-              "
-            >
+            <div className="flex items-center gap-2">
               <span>
                 Éléments par page :
               </span>
@@ -1744,17 +1340,7 @@ export default function Dashboard() {
                     1,
                   );
                 }}
-                className="
-                  rounded-lg
-                  border
-                  border-slate-200
-                  bg-slate-50
-                  px-2
-                  py-1
-                  outline-none
-                  dark:border-slate-700
-                  dark:bg-slate-900
-                "
+                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 outline-none dark:border-slate-700 dark:bg-slate-900"
               >
                 <option value={5}>
                   5
@@ -1772,23 +1358,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div
-          className="
-            border-t
-            border-slate-200
-            dark:border-slate-700
-            md:hidden
-          "
-        >
+        <div className="border-t border-slate-200 dark:border-slate-700 md:hidden">
           {paginatedPublications.length >
           0 ? (
-            <div
-              className="
-                divide-y
-                divide-slate-100
-                dark:divide-slate-700
-              "
-            >
+            <div className="divide-y divide-slate-100 dark:divide-slate-700">
               {paginatedPublications.map(
                 (
                   publication,
@@ -1797,46 +1370,16 @@ export default function Dashboard() {
                     key={
                       publication.id
                     }
-                    className="
-                      space-y-4
-                      p-4
-                    "
+                    className="space-y-4 p-4"
                   >
-                    <div
-                      className="
-                        flex
-                        items-start
-                        justify-between
-                        gap-3
-                      "
-                    >
-                      <div
-                        className="
-                          min-w-0
-                          flex-1
-                        "
-                      >
-                        <h3
-                          className="
-                            break-words
-                            text-sm
-                            font-semibold
-                            leading-5
-                            text-slate-900
-                            dark:text-white
-                          "
-                        >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="break-words text-sm font-semibold leading-5 text-slate-900 dark:text-white">
                           {publication.title ||
                             'Sans titre'}
                         </h3>
 
-                        <p
-                          className="
-                            mt-1
-                            text-xs
-                            text-slate-400
-                          "
-                        >
+                        <p className="mt-1 text-xs text-slate-400">
                           #
                           {
                             publication.id
@@ -1856,18 +1399,7 @@ export default function Dashboard() {
                       />
                     </div>
 
-                    <div
-                      className="
-                        grid
-                        grid-cols-2
-                        gap-3
-                        rounded-xl
-                        bg-slate-50
-                        p-3
-                        text-xs
-                        dark:bg-slate-900/50
-                      "
-                    >
+                    <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-900/50">
                       <MobileMetric
                         label="Destination"
                         value={destinationLabel(
@@ -1882,11 +1414,7 @@ export default function Dashboard() {
                         )}
                       />
 
-                      <div
-                        className="
-                          col-span-2
-                        "
-                      >
+                      <div className="col-span-2">
                         <MobileMetric
                           label="Publiée"
                           value={formatDate(
@@ -1896,14 +1424,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <div
-                      className="
-                        flex
-                        flex-col
-                        gap-2
-                        sm:flex-row
-                      "
-                    >
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <button
                         type="button"
                         onClick={() =>
@@ -1911,26 +1432,7 @@ export default function Dashboard() {
                             publication,
                           )
                         }
-                        className="
-                          inline-flex
-                          flex-1
-                          items-center
-                          justify-center
-                          gap-2
-                          rounded-xl
-                          border
-                          border-slate-200
-                          px-3
-                          py-2.5
-                          text-xs
-                          font-medium
-                          text-slate-700
-                          transition-colors
-                          hover:bg-slate-50
-                          dark:border-slate-700
-                          dark:text-slate-200
-                          dark:hover:bg-slate-700
-                        "
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
                       >
                         <Eye
                           size={15}
@@ -1953,27 +1455,7 @@ export default function Dashboard() {
                               publication,
                             )
                           }
-                          className="
-                            inline-flex
-                            flex-1
-                            items-center
-                            justify-center
-                            gap-2
-                            rounded-xl
-                            border
-                            border-rose-200
-                            px-3
-                            py-2.5
-                            text-xs
-                            font-medium
-                            text-rose-600
-                            transition-colors
-                            hover:bg-rose-50
-                            disabled:opacity-50
-                            dark:border-rose-900
-                            dark:text-rose-400
-                            dark:hover:bg-rose-950/30
-                          "
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-rose-200 px-3 py-2.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30"
                         >
                           <Ban
                             size={15}
@@ -1988,91 +1470,36 @@ export default function Dashboard() {
               )}
             </div>
           ) : (
-            <div
-              className="
-                px-6
-                py-12
-                text-center
-                text-sm
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
-              Aucune publication ne
-              correspond aux critères.
-            </div>
+            <EmptyPublications />
           )}
         </div>
 
-        <div
-          className="
-            hidden
-            overflow-x-auto
-            border-t
-            border-slate-200
-            dark:border-slate-700
-            md:block
-          "
-        >
-          <table
-            className="
-              min-w-[1000px]
-              w-full
-              text-left
-              text-sm
-            "
-          >
-            <thead
-              className="
-                bg-slate-50
-                text-xs
-                uppercase
-                tracking-wide
-                text-slate-500
-                dark:bg-slate-900/70
-                dark:text-slate-400
-              "
-            >
+        <div className="hidden overflow-x-auto border-t border-slate-200 dark:border-slate-700 md:block">
+          <table className="min-w-[1000px] w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
               <tr>
                 <th className="px-5 py-3">
                   Publication
                 </th>
-
                 <th className="px-5 py-3">
                   Destination
                 </th>
-
                 <th className="px-5 py-3">
                   Statut
                 </th>
-
                 <th className="px-5 py-3">
                   Planifiée
                 </th>
-
                 <th className="px-5 py-3">
                   Publiée
                 </th>
-
-                <th
-                  className="
-                    px-5
-                    py-3
-                    text-right
-                  "
-                >
+                <th className="px-5 py-3 text-right">
                   Actions
                 </th>
               </tr>
             </thead>
 
-            <tbody
-              className="
-                divide-y
-                divide-slate-100
-                dark:divide-slate-700
-              "
-            >
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {paginatedPublications.length >
               0 ? (
                 paginatedPublications.map(
@@ -2083,36 +1510,15 @@ export default function Dashboard() {
                       key={
                         publication.id
                       }
-                      className="
-                        hover:bg-slate-50/70
-                        dark:hover:bg-slate-700/30
-                      "
+                      className="hover:bg-slate-50/70 dark:hover:bg-slate-700/30"
                     >
-                      <td
-                        className="
-                          px-5
-                          py-4
-                        "
-                      >
-                        <p
-                          className="
-                            max-w-md
-                            font-medium
-                            text-slate-900
-                            dark:text-white
-                          "
-                        >
+                      <td className="px-5 py-4">
+                        <p className="max-w-md font-medium text-slate-900 dark:text-white">
                           {publication.title ||
                             'Sans titre'}
                         </p>
 
-                        <p
-                          className="
-                            mt-1
-                            text-xs
-                            text-slate-400
-                          "
-                        >
+                        <p className="mt-1 text-xs text-slate-400">
                           #
                           {
                             publication.id
@@ -2125,25 +1531,13 @@ export default function Dashboard() {
                         </p>
                       </td>
 
-                      <td
-                        className="
-                          px-5
-                          py-4
-                          text-slate-600
-                          dark:text-slate-300
-                        "
-                      >
+                      <td className="px-5 py-4 text-slate-600 dark:text-slate-300">
                         {destinationLabel(
                           publication.destination,
                         )}
                       </td>
 
-                      <td
-                        className="
-                          px-5
-                          py-4
-                        "
-                      >
+                      <td className="px-5 py-4">
                         <StatusBadge
                           status={
                             publication.status
@@ -2151,48 +1545,20 @@ export default function Dashboard() {
                         />
                       </td>
 
-                      <td
-                        className="
-                          whitespace-nowrap
-                          px-5
-                          py-4
-                          text-slate-600
-                          dark:text-slate-300
-                        "
-                      >
+                      <td className="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-slate-300">
                         {formatDate(
                           publication.scheduledAt,
                         )}
                       </td>
 
-                      <td
-                        className="
-                          whitespace-nowrap
-                          px-5
-                          py-4
-                          text-slate-600
-                          dark:text-slate-300
-                        "
-                      >
+                      <td className="whitespace-nowrap px-5 py-4 text-slate-600 dark:text-slate-300">
                         {formatDate(
                           publication.publishedAt,
                         )}
                       </td>
 
-                      <td
-                        className="
-                          px-5
-                          py-4
-                        "
-                      >
-                        <div
-                          className="
-                            flex
-                            items-center
-                            justify-end
-                            gap-2
-                          "
-                        >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
                             onClick={() =>
@@ -2200,23 +1566,7 @@ export default function Dashboard() {
                                 publication,
                               )
                             }
-                            className="
-                              inline-flex
-                              items-center
-                              gap-1.5
-                              rounded-lg
-                              border
-                              border-slate-200
-                              px-3
-                              py-2
-                              text-xs
-                              font-medium
-                              text-slate-700
-                              hover:bg-slate-50
-                              dark:border-slate-700
-                              dark:text-slate-200
-                              dark:hover:bg-slate-700
-                            "
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
                           >
                             <Eye
                               size={15}
@@ -2239,24 +1589,7 @@ export default function Dashboard() {
                                   publication,
                                 )
                               }
-                              className="
-                                inline-flex
-                                items-center
-                                gap-1.5
-                                rounded-lg
-                                border
-                                border-rose-200
-                                px-3
-                                py-2
-                                text-xs
-                                font-medium
-                                text-rose-600
-                                hover:bg-rose-50
-                                disabled:opacity-50
-                                dark:border-rose-900
-                                dark:text-rose-400
-                                dark:hover:bg-rose-950/30
-                              "
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30"
                             >
                               <Ban
                                 size={15}
@@ -2274,13 +1607,7 @@ export default function Dashboard() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="
-                      px-6
-                      py-14
-                      text-center
-                      text-slate-500
-                      dark:text-slate-400
-                    "
+                    className="px-6 py-14 text-center text-slate-500 dark:text-slate-400"
                   >
                     Aucune publication ne
                     correspond aux
@@ -2292,28 +1619,8 @@ export default function Dashboard() {
           </table>
         </div>
 
-        <div
-          className="
-            flex
-            flex-col
-            gap-3
-            border-t
-            border-slate-200
-            px-4
-            py-3
-            dark:border-slate-700
-            sm:flex-row
-            sm:items-center
-            sm:justify-between
-          "
-        >
-          <p
-            className="
-              text-xs
-              text-slate-500
-              dark:text-slate-400
-            "
-          >
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Page{' '}
             <strong>
               {displayedPage}
@@ -2324,13 +1631,7 @@ export default function Dashboard() {
             </strong>
           </p>
 
-          <div
-            className="
-              flex
-              items-center
-              gap-1
-            "
-          >
+          <div className="flex items-center gap-1">
             <PaginationButton
               label="Première page"
               disabled={
@@ -2415,17 +1716,29 @@ export default function Dashboard() {
           contents={
             contents
           }
+          deletingContentId={
+            deletingContentId
+          }
           onRead={(
             content,
           ) => {
             setSelectedContent(
               content,
             );
-
             setShowContents(
               false,
             );
           }}
+          onEdit={
+            handleEditContent
+          }
+          onDelete={(
+            content,
+          ) =>
+            setContentToDelete(
+              content,
+            )
+          }
           onClose={() =>
             setShowContents(
               false,
@@ -2439,11 +1752,20 @@ export default function Dashboard() {
           content={
             selectedContent
           }
+          onEdit={
+            handleEditContent
+          }
+          onDelete={(
+            content,
+          ) =>
+            setContentToDelete(
+              content,
+            )
+          }
           onBack={() => {
             setSelectedContent(
               null,
             );
-
             setShowContents(
               true,
             );
@@ -2451,6 +1773,28 @@ export default function Dashboard() {
           onClose={() =>
             setSelectedContent(
               null,
+            )
+          }
+        />
+      )}
+
+      {contentToDelete && (
+        <DeleteContentModal
+          content={
+            contentToDelete
+          }
+          loading={
+            deletingContentId ===
+            contentToDelete.id
+          }
+          onClose={() =>
+            setContentToDelete(
+              null,
+            )
+          }
+          onConfirm={() =>
+            handleDeleteContent(
+              contentToDelete,
             )
           }
         />
@@ -2478,7 +1822,6 @@ export default function Dashboard() {
             setSelectedPublication(
               null,
             );
-
             setSelectedContent(
               content,
             );
@@ -2525,7 +1868,10 @@ export default function Dashboard() {
 
 function ContentsModal({
   contents,
+  deletingContentId,
   onRead,
+  onEdit,
+  onDelete,
   onClose,
 }) {
   const [
@@ -2574,360 +1920,137 @@ function ContentsModal({
     ]);
 
   return (
-    <div
-      className="
-        fixed
-        inset-0
-        z-50
-        flex
-        items-center
-        justify-center
-        bg-slate-950/60
-        p-3
-        backdrop-blur-sm
-        sm:p-4
-      "
-      onMouseDown={(
-        event,
-      ) => {
-        if (
-          event.target ===
-          event.currentTarget
-        ) {
-          onClose();
-        }
-      }}
+    <ModalShell
+      title="Mes contenus"
+      eyebrow="Bibliothèque"
+      onClose={onClose}
+      maxWidth="max-w-5xl"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="contents-title"
-        className="
-          flex
-          max-h-[92vh]
-          w-full
-          max-w-4xl
-          flex-col
-          overflow-hidden
-          rounded-2xl
-          border
-          border-slate-200
-          bg-white
-          shadow-2xl
-          dark:border-slate-700
-          dark:bg-slate-800
-        "
-      >
-        <div
-          className="
-            flex
-            items-start
-            justify-between
-            gap-4
-            border-b
-            border-slate-200
-            px-4
-            py-4
-            dark:border-slate-700
-            sm:px-6
-            sm:py-5
-          "
-        >
-          <div>
-            <p
-              className="
-                text-xs
-                font-semibold
-                uppercase
-                tracking-wide
-                text-indigo-600
-                dark:text-indigo-400
-              "
-            >
-              Bibliothèque
-            </p>
+      <div className="space-y-3 border-b border-slate-200 p-4 dark:border-slate-700 sm:p-5">
+        <div className="relative">
+          <Search
+            size={17}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          />
 
-            <h2
-              id="contents-title"
-              className="
-                mt-1
-                text-xl
-                font-bold
-                text-slate-900
-                dark:text-white
-              "
-            >
-              Mes contenus
-            </h2>
-
-            <p
-              className="
-                mt-1
-                text-sm
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
-              {
-                contents.length
-              } contenu(s)
-              sauvegardé(s)
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            className="
-              rounded-lg
-              p-2
-              text-slate-500
-              hover:bg-slate-100
-              dark:hover:bg-slate-700
-            "
-          >
-            <X size={20} />
-          </button>
+          <input
+            type="text"
+            value={search}
+            onChange={(
+              event,
+            ) =>
+              setSearch(
+                event.target
+                  .value,
+              )
+            }
+            placeholder="Rechercher un contenu..."
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
         </div>
 
-        <div
-          className="
-            space-y-3
-            border-b
-            border-slate-200
-            p-4
-            dark:border-slate-700
-            sm:p-5
-          "
-        >
-          <div
-            className="
-              relative
-            "
-          >
-            <Search
-              size={17}
-              className="
-                absolute
-                left-3.5
-                top-1/2
-                -translate-y-1/2
-                text-slate-400
-              "
-            />
-
-            <input
-              type="text"
-              value={search}
-              onChange={(
-                event,
-              ) =>
-                setSearch(
-                  event.target
-                    .value,
-                )
-              }
-              placeholder="Rechercher un contenu..."
-              className="
-                w-full
-                rounded-xl
-                border
-                border-slate-200
-                bg-slate-50
-                py-2.5
-                pl-10
-                pr-4
-                text-sm
-                text-slate-900
-                outline-none
-                focus:border-indigo-500
-                focus:ring-2
-                focus:ring-indigo-500/20
-                dark:border-slate-700
-                dark:bg-slate-900
-                dark:text-white
-              "
-            />
-          </div>
-
-          <div
-            className="
-              flex
-              flex-wrap
-              gap-2
-            "
-          >
-            {[
-              [
-                'ALL',
-                'Tous',
-              ],
-              [
-                'DRAFT',
-                'Brouillons',
-              ],
-              [
-                'READY',
-                'Prêts',
-              ],
-              [
-                'ARCHIVED',
-                'Archivés',
-              ],
-            ].map(
-              ([
-                value,
-                label,
-              ]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() =>
-                    setStatus(
-                      value,
-                    )
+        <div className="flex flex-wrap gap-2">
+          {[
+            [
+              'ALL',
+              'Tous',
+            ],
+            [
+              'DRAFT',
+              'Brouillons',
+            ],
+            [
+              'READY',
+              'Prêts',
+            ],
+            [
+              'ARCHIVED',
+              'Archivés',
+            ],
+          ].map(
+            ([
+              value,
+              label,
+            ]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() =>
+                  setStatus(
+                    value,
+                  )
+                }
+                className={`
+                  rounded-lg
+                  border
+                  px-3
+                  py-2
+                  text-xs
+                  font-semibold
+                  transition-colors
+                  ${
+                    status ===
+                    value
+                      ? 'border-indigo-600 bg-indigo-600 text-white'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'
                   }
-                  className={`
-                    rounded-lg
-                    border
-                    px-3
-                    py-2
-                    text-xs
-                    font-semibold
-                    transition-colors
-                    ${
-                      status ===
-                      value
-                        ? 'border-indigo-600 bg-indigo-600 text-white'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'
-                    }
-                  `}
-                >
-                  {label}
-                </button>
-              ),
-            )}
-          </div>
+                `}
+              >
+                {label}
+              </button>
+            ),
+          )}
         </div>
+      </div>
 
-        <div
-          className="
-            flex-1
-            overflow-y-auto
-            p-4
-            sm:p-5
-          "
-        >
-          {filteredContents.length >
-          0 ? (
-            <div
-              className="
-                space-y-3
-              "
-            >
-              {filteredContents.map(
-                (content) => (
-                  <article
-                    key={
-                      content.id
-                    }
-                    className="
-                      rounded-xl
-                      border
-                      border-slate-200
-                      p-4
-                      transition-colors
-                      hover:bg-slate-50
-                      dark:border-slate-700
-                      dark:hover:bg-slate-700/30
-                    "
-                  >
-                    <div
-                      className="
-                        flex
-                        flex-col
-                        gap-4
-                        sm:flex-row
-                        sm:items-center
-                        sm:justify-between
-                      "
-                    >
-                      <div
-                        className="
-                          min-w-0
-                          flex-1
-                        "
-                      >
-                        <div
-                          className="
-                            flex
-                            flex-wrap
-                            items-center
-                            gap-2
-                          "
-                        >
-                          <ContentStatusBadge
-                            status={
-                              content.status
-                            }
-                          />
+      <div className="max-h-[58vh] overflow-y-auto p-4 sm:p-5">
+        {filteredContents.length >
+        0 ? (
+          <div className="space-y-3">
+            {filteredContents.map(
+              (content) => (
+                <article
+                  key={
+                    content.id
+                  }
+                  className="rounded-xl border border-slate-200 p-4 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/30"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ContentStatusBadge
+                          status={
+                            content.status
+                          }
+                        />
 
-                          <span
-                            className="
-                              text-xs
-                              text-slate-400
-                            "
-                          >
-                            contenu #
-                            {
-                              content.id
-                            }
-                          </span>
-                        </div>
-
-                        <h3
-                          className="
-                            mt-2
-                            break-words
-                            font-semibold
-                            text-slate-900
-                            dark:text-white
-                          "
-                        >
-                          {content.title ||
-                            'Sans titre'}
-                        </h3>
-
-                        <p
-                          className="
-                            mt-2
-                            line-clamp-2
-                            whitespace-pre-wrap
-                            text-sm
-                            leading-6
-                            text-slate-500
-                            dark:text-slate-400
-                          "
-                        >
-                          {content.body ||
-                            'Aucun contenu.'}
-                        </p>
-
-                        <p
-                          className="
-                            mt-2
-                            text-xs
-                            text-slate-400
-                          "
-                        >
-                          Modifié le{' '}
-                          {formatDate(
-                            content.updatedAt,
-                          )}
-                        </p>
+                        <span className="text-xs text-slate-400">
+                          contenu #
+                          {
+                            content.id
+                          }
+                        </span>
                       </div>
 
+                      <h3 className="mt-2 break-words font-semibold text-slate-900 dark:text-white">
+                        {content.title ||
+                          'Sans titre'}
+                      </h3>
+
+                      <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-400">
+                        {content.body ||
+                          'Aucun contenu.'}
+                      </p>
+
+                      <p className="mt-2 text-xs text-slate-400">
+                        Modifié le{' '}
+                        {formatDate(
+                          content.updatedAt,
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() =>
@@ -2935,405 +2058,319 @@ function ContentsModal({
                             content,
                           )
                         }
-                        className="
-                          inline-flex
-                          shrink-0
-                          items-center
-                          justify-center
-                          gap-2
-                          rounded-xl
-                          bg-indigo-600
-                          px-4
-                          py-2.5
-                          text-sm
-                          font-semibold
-                          text-white
-                          hover:bg-indigo-700
-                        "
+                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 lg:flex-none"
                       >
                         <BookOpen
-                          size={16}
+                          size={15}
                         />
 
                         Lire
                       </button>
+
+                      {canModifyContent(
+                        content,
+                      ) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onEdit(
+                                content,
+                              )
+                            }
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-indigo-200 px-3 py-2.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-400 dark:hover:bg-indigo-950/30 lg:flex-none"
+                          >
+                            <Pencil
+                              size={15}
+                            />
+
+                            Modifier
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              deletingContentId ===
+                              content.id
+                            }
+                            onClick={() =>
+                              onDelete(
+                                content,
+                              )
+                            }
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-rose-200 px-3 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30 lg:flex-none"
+                          >
+                            <Trash2
+                              size={15}
+                            />
+
+                            Supprimer
+                          </button>
+                        </>
+                      )}
                     </div>
-                  </article>
-                ),
-              )}
-            </div>
-          ) : (
-            <div
-              className="
-                flex
-                min-h-56
-                flex-col
-                items-center
-                justify-center
-                text-center
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
-              <FileText
-                size={36}
-                className="
-                  mb-3
-                  opacity-40
-                "
-              />
+                  </div>
+                </article>
+              ),
+            )}
+          </div>
+        ) : (
+          <div className="flex min-h-56 flex-col items-center justify-center text-center text-slate-500 dark:text-slate-400">
+            <FileText
+              size={36}
+              className="mb-3 opacity-40"
+            />
 
-              <p
-                className="
-                  text-sm
-                  font-medium
-                "
-              >
-                Aucun contenu trouvé.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div
-          className="
-            flex
-            items-center
-            justify-between
-            border-t
-            border-slate-200
-            px-4
-            py-3
-            dark:border-slate-700
-            sm:px-5
-          "
-        >
-          <p
-            className="
-              text-xs
-              text-slate-500
-              dark:text-slate-400
-            "
-          >
-            {
-              filteredContents.length
-            } résultat(s)
-          </p>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="
-              rounded-xl
-              border
-              border-slate-200
-              px-4
-              py-2
-              text-sm
-              font-medium
-              text-slate-700
-              hover:bg-slate-50
-              dark:border-slate-700
-              dark:text-slate-200
-              dark:hover:bg-slate-700
-            "
-          >
-            Fermer
-          </button>
-        </div>
+            <p className="text-sm font-medium">
+              Aucun contenu trouvé.
+            </p>
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 dark:border-slate-700 sm:px-5">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {
+            filteredContents.length
+          } résultat(s)
+        </p>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          Fermer
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 
 function ContentReaderModal({
   content,
+  onEdit,
+  onDelete,
   onBack,
   onClose,
 }) {
   return (
+    <ModalShell
+      title={
+        content.title ||
+        'Sans titre'
+      }
+      eyebrow={`Contenu #${content.id}`}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+    >
+      <div className="p-4 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <ContentStatusBadge
+            status={
+              content.status
+            }
+          />
+
+          <span className="text-xs text-slate-400">
+            Créé :{' '}
+            {formatDate(
+              content.createdAt,
+            )}
+          </span>
+
+          <span className="text-xs text-slate-400">
+            ·
+          </span>
+
+          <span className="text-xs text-slate-400">
+            Modifié :{' '}
+            {formatDate(
+              content.updatedAt,
+            )}
+          </span>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50 sm:p-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Contenu
+          </p>
+
+          <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-800 dark:text-slate-200">
+            {content.body ||
+              'Aucun contenu.'}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-4 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          Retour aux contenus
+        </button>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {canModifyContent(
+            content,
+          ) && (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  onDelete(
+                    content,
+                  )
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/30"
+              >
+                <Trash2
+                  size={16}
+                />
+
+                Supprimer
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onEdit(
+                    content,
+                  )
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                <Pencil
+                  size={16}
+                />
+
+                Modifier
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function DeleteContentModal({
+  content,
+  loading,
+  onClose,
+  onConfirm,
+}) {
+  return (
     <div
-      className="
-        fixed
-        inset-0
-        z-[55]
-        flex
-        items-center
-        justify-center
-        bg-slate-950/60
-        p-3
-        backdrop-blur-sm
-        sm:p-4
-      "
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
       onMouseDown={(
         event,
       ) => {
         if (
           event.target ===
-          event.currentTarget
+            event.currentTarget &&
+          !loading
         ) {
           onClose();
         }
       }}
     >
       <div
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
-        aria-labelledby="content-reader-title"
-        className="
-          max-h-[92vh]
-          w-full
-          max-w-3xl
-          overflow-y-auto
-          rounded-2xl
-          border
-          border-slate-200
-          bg-white
-          shadow-2xl
-          dark:border-slate-700
-          dark:bg-slate-800
-        "
+        aria-labelledby="delete-content-title"
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
       >
-        <div
-          className="
-            flex
-            items-start
-            justify-between
-            gap-4
-            border-b
-            border-slate-200
-            px-4
-            py-4
-            dark:border-slate-700
-            sm:px-6
-            sm:py-5
-          "
-        >
-          <div
-            className="
-              min-w-0
-              flex-1
-            "
-          >
-            <div
-              className="
-                flex
-                flex-wrap
-                items-center
-                gap-2
-              "
-            >
-              <ContentStatusBadge
-                status={
-                  content.status
-                }
-              />
+        <div className="flex gap-4 p-5 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
+            <Trash2
+              size={20}
+            />
+          </div>
 
-              <span
-                className="
-                  text-xs
-                  text-slate-400
-                "
-              >
-                Contenu #
-                {
-                  content.id
-                }
-              </span>
-            </div>
-
+          <div className="min-w-0">
             <h2
-              id="content-reader-title"
-              className="
-                mt-3
-                break-words
-                text-xl
-                font-bold
-                leading-7
-                text-slate-900
-                dark:text-white
-              "
+              id="delete-content-title"
+              className="text-lg font-bold text-slate-900 dark:text-white"
             >
-              {content.title ||
-                'Sans titre'}
+              Supprimer ce contenu ?
             </h2>
-          </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer"
-            className="
-              shrink-0
-              rounded-lg
-              p-2
-              text-slate-500
-              hover:bg-slate-100
-              dark:hover:bg-slate-700
-            "
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div
-          className="
-            p-4
-            sm:p-6
-          "
-        >
-          <div
-            className="
-              mb-5
-              grid
-              grid-cols-1
-              gap-3
-              sm:grid-cols-2
-            "
-          >
-            <DetailItem
-              label="Créé"
-              value={formatDate(
-                content.createdAt,
-              )}
-            />
-
-            <DetailItem
-              label="Dernière modification"
-              value={formatDate(
-                content.updatedAt,
-              )}
-            />
-          </div>
-
-          <div
-            className="
-              rounded-2xl
-              border
-              border-slate-200
-              bg-slate-50
-              p-4
-              dark:border-slate-700
-              dark:bg-slate-900/50
-              sm:p-5
-            "
-          >
-            <p
-              className="
-                mb-3
-                text-xs
-                font-semibold
-                uppercase
-                tracking-wide
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
-              Contenu
+            <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Le contenu{' '}
+              <strong>
+                #{content.id}
+              </strong>{' '}
+              «{' '}
+              {content.title ||
+                'Sans titre'}{' '}
+              » sera supprimé s’il
+              n’est lié à aucune
+              publication.
             </p>
 
-            <div
-              className="
-                whitespace-pre-wrap
-                break-words
-                text-sm
-                leading-7
-                text-slate-800
-                dark:text-slate-200
-              "
-            >
-              {content.body ||
-                'Aucun contenu.'}
-            </div>
+            <p className="mt-2 text-sm leading-6 text-amber-600 dark:text-amber-400">
+              S’il possède déjà des
+              publications, le backend
+              le conservera en le
+              passant au statut
+              « Archivé ».
+            </p>
+
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              Cette action ne supprime
+              pas un post déjà publié
+              sur LinkedIn ou
+              WordPress.
+            </p>
           </div>
         </div>
 
-        <div
-          className="
-            flex
-            flex-col-reverse
-            gap-2
-            border-t
-            border-slate-200
-            px-4
-            py-4
-            dark:border-slate-700
-            sm:flex-row
-            sm:justify-end
-            sm:px-6
-          "
-        >
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="
-                rounded-xl
-                border
-                border-slate-200
-                px-4
-                py-2.5
-                text-sm
-                font-medium
-                text-slate-700
-                hover:bg-slate-50
-                dark:border-slate-700
-                dark:text-slate-200
-                dark:hover:bg-slate-700
-              "
-            >
-              Retour aux contenus
-            </button>
-          )}
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            Retour
+          </button>
 
           <button
             type="button"
-            onClick={onClose}
-            className="
-              rounded-xl
-              bg-indigo-600
-              px-4
-              py-2.5
-              text-sm
-              font-semibold
-              text-white
-              hover:bg-indigo-700
-            "
+            disabled={loading}
+            onClick={
+              onConfirm
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
           >
-            Fermer
+            {loading ? (
+              <LoaderCircle
+                size={16}
+                className="animate-spin"
+              />
+            ) : (
+              <Trash2
+                size={16}
+              />
+            )}
+
+            {loading
+              ? 'Suppression...'
+              : 'Confirmer'}
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function MobileMetric({
-  label,
-  value,
-}) {
-  return (
-    <div>
-      <p
-        className="
-          text-slate-400
-          dark:text-slate-500
-        "
-      >
-        {label}
-      </p>
-
-      <p
-        className="
-          mt-1
-          break-words
-          font-medium
-          text-slate-700
-          dark:text-slate-200
-        "
-      >
-        {value}
-      </p>
     </div>
   );
 }
@@ -3346,17 +2383,7 @@ function CancelPublicationModal({
 }) {
   return (
     <div
-      className="
-        fixed
-        inset-0
-        z-[60]
-        flex
-        items-center
-        justify-center
-        bg-slate-950/60
-        p-4
-        backdrop-blur-sm
-      "
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
       onMouseDown={(
         event,
       ) => {
@@ -3373,69 +2400,23 @@ function CancelPublicationModal({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="cancel-publication-title"
-        className="
-          w-full
-          max-w-md
-          overflow-hidden
-          rounded-2xl
-          border
-          border-slate-200
-          bg-white
-          shadow-2xl
-          dark:border-slate-700
-          dark:bg-slate-800
-        "
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
       >
-        <div
-          className="
-            flex
-            gap-4
-            p-5
-            sm:p-6
-          "
-        >
-          <div
-            className="
-              flex
-              h-11
-              w-11
-              shrink-0
-              items-center
-              justify-center
-              rounded-full
-              bg-rose-100
-              text-rose-600
-              dark:bg-rose-950/50
-              dark:text-rose-400
-            "
-          >
+        <div className="flex gap-4 p-5 sm:p-6">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
             <Ban size={20} />
           </div>
 
           <div className="min-w-0">
             <h2
               id="cancel-publication-title"
-              className="
-                text-lg
-                font-bold
-                text-slate-900
-                dark:text-white
-              "
+              className="text-lg font-bold text-slate-900 dark:text-white"
             >
               Annuler la
               publication ?
             </h2>
 
-            <p
-              className="
-                mt-2
-                break-words
-                text-sm
-                leading-6
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
+            <p className="mt-2 break-words text-sm leading-6 text-slate-500 dark:text-slate-400">
               La publication{' '}
               <strong>
                 #{publication.id}
@@ -3448,14 +2429,7 @@ function CancelPublicationModal({
 
             {publication.status ===
               'SCHEDULED' && (
-              <p
-                className="
-                  mt-2
-                  text-sm
-                  text-amber-600
-                  dark:text-amber-400
-                "
-              >
+              <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
                 Elle ne sera plus
                 publiée à la date
                 planifiée.
@@ -3464,41 +2438,12 @@ function CancelPublicationModal({
           </div>
         </div>
 
-        <div
-          className="
-            flex
-            flex-col-reverse
-            gap-2
-            border-t
-            border-slate-200
-            px-5
-            py-4
-            dark:border-slate-700
-            sm:flex-row
-            sm:justify-end
-            sm:gap-3
-            sm:px-6
-          "
-        >
+        <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
           <button
             type="button"
             disabled={loading}
             onClick={onClose}
-            className="
-              rounded-xl
-              border
-              border-slate-200
-              px-4
-              py-2.5
-              text-sm
-              font-medium
-              text-slate-700
-              hover:bg-slate-50
-              disabled:opacity-50
-              dark:border-slate-700
-              dark:text-slate-200
-              dark:hover:bg-slate-700
-            "
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
           >
             Retour
           </button>
@@ -3509,42 +2454,22 @@ function CancelPublicationModal({
             onClick={
               onConfirm
             }
-            className="
-              inline-flex
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              bg-rose-600
-              px-4
-              py-2.5
-              text-sm
-              font-semibold
-              text-white
-              hover:bg-rose-700
-              disabled:opacity-50
-            "
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
           >
             {loading ? (
-              <>
-                <LoaderCircle
-                  size={16}
-                  className="
-                    animate-spin
-                  "
-                />
-
-                Annulation...
-              </>
+              <LoaderCircle
+                size={16}
+                className="animate-spin"
+              />
             ) : (
-              <>
-                <Ban
-                  size={16}
-                />
-
-                Confirmer
-              </>
+              <Ban
+                size={16}
+              />
             )}
+
+            {loading
+              ? 'Annulation...'
+              : 'Confirmer'}
           </button>
         </div>
       </div>
@@ -3566,19 +2491,195 @@ function PublicationDetailsModal({
     );
 
   return (
+    <ModalShell
+      title={
+        publication.title ||
+        'Sans titre'
+      }
+      eyebrow={`Publication #${publication.id}`}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+    >
+      <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:gap-4 sm:p-6">
+        <DetailItem
+          label="ID publication"
+          value={
+            publication.id
+          }
+        />
+
+        <DetailItem
+          label="ID contenu"
+          value={
+            publication.contentId
+          }
+        />
+
+        <DetailItem
+          label="Destination"
+          value={destinationLabel(
+            publication.destination,
+          )}
+        />
+
+        <DetailItem
+          label="Statut"
+          value={
+            STATUS_LABELS[
+              publication.status
+            ] ||
+            publication.status
+          }
+        />
+
+        <DetailItem
+          label="Créée"
+          value={formatDate(
+            publication.createdAt,
+          )}
+        />
+
+        <DetailItem
+          label="Dernière mise à jour"
+          value={formatDate(
+            publication.updatedAt,
+          )}
+        />
+
+        <DetailItem
+          label="Planifiée"
+          value={formatDate(
+            publication.scheduledAt,
+          )}
+        />
+
+        <DetailItem
+          label="Publiée"
+          value={formatDate(
+            publication.publishedAt,
+          )}
+        />
+
+        <DetailItem
+          label="ID externe"
+          value={
+            publication.externalId ||
+            '—'
+          }
+        />
+
+        <DetailItem
+          label="Exécution n8n"
+          value={
+            publication.n8nExecutionId ||
+            '—'
+          }
+        />
+
+        <div className="sm:col-span-2">
+          <DetailItem
+            label="Message d’erreur"
+            value={
+              publication.errorMessage ||
+              'Aucune erreur'
+            }
+            error={Boolean(
+              publication.errorMessage,
+            )}
+          />
+        </div>
+
+        {content && (
+          <div className="sm:col-span-2">
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">
+                    Contenu associé
+                  </p>
+
+                  <p className="mt-1 break-words text-sm font-semibold text-slate-900 dark:text-white">
+                    {content.title}
+                  </p>
+
+                  <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    {content.body}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    onReadContent(
+                      content,
+                    )
+                  }
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                >
+                  <BookOpen
+                    size={16}
+                  />
+
+                  Lire
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-4 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          Fermer
+        </button>
+
+        {canCancel && (
+          <button
+            type="button"
+            disabled={
+              cancelling
+            }
+            onClick={() =>
+              onCancel(
+                publication,
+              )
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+          >
+            {cancelling ? (
+              <LoaderCircle
+                size={16}
+                className="animate-spin"
+              />
+            ) : (
+              <Ban
+                size={16}
+              />
+            )}
+
+            Annuler la
+            publication
+          </button>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({
+  title,
+  eyebrow,
+  onClose,
+  maxWidth,
+  children,
+}) {
+  return (
     <div
-      className="
-        fixed
-        inset-0
-        z-50
-        flex
-        items-center
-        justify-center
-        bg-slate-950/60
-        p-3
-        backdrop-blur-sm
-        sm:p-4
-      "
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4"
       onMouseDown={(
         event,
       ) => {
@@ -3593,378 +2694,32 @@ function PublicationDetailsModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="publication-details-title"
-        className="
-          max-h-[92vh]
-          w-full
-          max-w-2xl
-          overflow-y-auto
-          rounded-2xl
-          border
-          border-slate-200
-          bg-white
-          shadow-2xl
-          dark:border-slate-700
-          dark:bg-slate-800
-        "
+        className={`max-h-[92vh] w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800 ${maxWidth}`}
       >
-        <div
-          className="
-            flex
-            items-start
-            justify-between
-            gap-4
-            border-b
-            border-slate-200
-            px-4
-            py-4
-            dark:border-slate-700
-            sm:px-6
-            sm:py-5
-          "
-        >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:px-6 sm:py-5">
           <div className="min-w-0">
-            <p
-              className="
-                text-xs
-                font-semibold
-                uppercase
-                tracking-wide
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
-              Publication{' '}
-              #{publication.id}
-            </p>
+            {eyebrow && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                {eyebrow}
+              </p>
+            )}
 
-            <h2
-              id="publication-details-title"
-              className="
-                mt-1
-                break-words
-                text-lg
-                font-bold
-                text-slate-900
-                dark:text-white
-              "
-            >
-              {publication.title ||
-                'Sans titre'}
+            <h2 className="mt-1 break-words text-lg font-bold text-slate-900 dark:text-white">
+              {title}
             </h2>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="
-              shrink-0
-              rounded-lg
-              p-2
-              text-slate-500
-              hover:bg-slate-100
-              dark:hover:bg-slate-700
-            "
+            className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
             aria-label="Fermer"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div
-          className="
-            grid
-            grid-cols-1
-            gap-3
-            p-4
-            sm:grid-cols-2
-            sm:gap-4
-            sm:p-6
-          "
-        >
-          <DetailItem
-            label="ID publication"
-            value={
-              publication.id
-            }
-          />
-
-          <DetailItem
-            label="ID contenu"
-            value={
-              publication.contentId
-            }
-          />
-
-          <DetailItem
-            label="Destination"
-            value={destinationLabel(
-              publication.destination,
-            )}
-          />
-
-          <DetailItem
-            label="Statut"
-            value={
-              STATUS_LABELS[
-                publication.status
-              ] ||
-              publication.status
-            }
-          />
-
-          <DetailItem
-            label="Créée"
-            value={formatDate(
-              publication.createdAt,
-            )}
-          />
-
-          <DetailItem
-            label="Dernière mise à jour"
-            value={formatDate(
-              publication.updatedAt,
-            )}
-          />
-
-          <DetailItem
-            label="Planifiée"
-            value={formatDate(
-              publication.scheduledAt,
-            )}
-          />
-
-          <DetailItem
-            label="Publiée"
-            value={formatDate(
-              publication.publishedAt,
-            )}
-          />
-
-          <DetailItem
-            label="ID externe"
-            value={
-              publication.externalId ||
-              '—'
-            }
-          />
-
-          <DetailItem
-            label="Exécution n8n"
-            value={
-              publication.n8nExecutionId ||
-              '—'
-            }
-          />
-
-          <div
-            className="
-              sm:col-span-2
-            "
-          >
-            <DetailItem
-              label="Message d’erreur"
-              value={
-                publication.errorMessage ||
-                'Aucune erreur'
-              }
-              error={Boolean(
-                publication.errorMessage,
-              )}
-            />
-          </div>
-
-          {content && (
-            <div
-              className="
-                sm:col-span-2
-              "
-            >
-              <div
-                className="
-                  rounded-xl
-                  border
-                  border-indigo-200
-                  bg-indigo-50
-                  p-4
-                  dark:border-indigo-900
-                  dark:bg-indigo-950/20
-                "
-              >
-                <div
-                  className="
-                    flex
-                    flex-col
-                    gap-3
-                    sm:flex-row
-                    sm:items-center
-                    sm:justify-between
-                  "
-                >
-                  <div
-                    className="
-                      min-w-0
-                    "
-                  >
-                    <p
-                      className="
-                        text-xs
-                        font-semibold
-                        uppercase
-                        tracking-wide
-                        text-indigo-600
-                        dark:text-indigo-400
-                      "
-                    >
-                      Contenu associé
-                    </p>
-
-                    <p
-                      className="
-                        mt-1
-                        break-words
-                        text-sm
-                        font-semibold
-                        text-slate-900
-                        dark:text-white
-                      "
-                    >
-                      {content.title}
-                    </p>
-
-                    <p
-                      className="
-                        mt-1
-                        line-clamp-2
-                        whitespace-pre-wrap
-                        text-xs
-                        leading-5
-                        text-slate-500
-                        dark:text-slate-400
-                      "
-                    >
-                      {content.body}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onReadContent(
-                        content,
-                      )
-                    }
-                    className="
-                      inline-flex
-                      shrink-0
-                      items-center
-                      justify-center
-                      gap-2
-                      rounded-xl
-                      bg-indigo-600
-                      px-4
-                      py-2.5
-                      text-sm
-                      font-semibold
-                      text-white
-                      hover:bg-indigo-700
-                    "
-                  >
-                    <BookOpen
-                      size={16}
-                    />
-
-                    Lire
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div
-          className="
-            flex
-            flex-col-reverse
-            gap-2
-            border-t
-            border-slate-200
-            px-4
-            py-4
-            dark:border-slate-700
-            sm:flex-row
-            sm:items-center
-            sm:justify-end
-            sm:gap-3
-            sm:px-6
-          "
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            className="
-              rounded-xl
-              border
-              border-slate-200
-              px-4
-              py-2.5
-              text-sm
-              font-medium
-              text-slate-700
-              hover:bg-slate-50
-              dark:border-slate-700
-              dark:text-slate-200
-              dark:hover:bg-slate-700
-            "
-          >
-            Fermer
-          </button>
-
-          {canCancel && (
-            <button
-              type="button"
-              disabled={
-                cancelling
-              }
-              onClick={() =>
-                onCancel(
-                  publication,
-                )
-              }
-              className="
-                inline-flex
-                items-center
-                justify-center
-                gap-2
-                rounded-xl
-                bg-rose-600
-                px-4
-                py-2.5
-                text-sm
-                font-semibold
-                text-white
-                hover:bg-rose-700
-                disabled:opacity-50
-              "
-            >
-              {cancelling ? (
-                <LoaderCircle
-                  size={16}
-                  className="
-                    animate-spin
-                  "
-                />
-              ) : (
-                <Ban
-                  size={16}
-                />
-              )}
-
-              Annuler la
-              publication
-            </button>
-          )}
-        </div>
+        {children}
       </div>
     </div>
   );
@@ -3976,23 +2731,8 @@ function DetailItem({
   error = false,
 }) {
   return (
-    <div
-      className="
-        rounded-xl
-        bg-slate-50
-        px-4
-        py-3
-        dark:bg-slate-900/50
-      "
-    >
-      <p
-        className="
-          text-xs
-          font-medium
-          text-slate-500
-          dark:text-slate-400
-        "
-      >
+    <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/50">
+      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
         {label}
       </p>
 
@@ -4027,7 +2767,6 @@ function KpiCard({
     indigo: {
       value:
         'text-slate-900 dark:text-white',
-
       icon:
         'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400',
     },
@@ -4035,7 +2774,6 @@ function KpiCard({
     emerald: {
       value:
         'text-emerald-600 dark:text-emerald-400',
-
       icon:
         'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
     },
@@ -4043,7 +2781,6 @@ function KpiCard({
     blue: {
       value:
         'text-blue-600 dark:text-blue-400',
-
       icon:
         'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
     },
@@ -4051,7 +2788,6 @@ function KpiCard({
     rose: {
       value:
         'text-rose-600 dark:text-rose-400',
-
       icon:
         'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400',
     },
@@ -4062,60 +2798,23 @@ function KpiCard({
     variants.indigo;
 
   return (
-    <div
-      className="
-        flex
-        items-center
-        justify-between
-        rounded-2xl
-        border
-        border-slate-200/80
-        bg-white
-        p-5
-        shadow-sm
-        dark:border-slate-700/60
-        dark:bg-slate-800
-      "
-    >
+    <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-800">
       <div>
-        <p
-          className="
-            text-xs
-            font-medium
-            uppercase
-            tracking-wider
-            text-slate-500
-            dark:text-slate-400
-          "
-        >
+        <p className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
           {label}
         </p>
 
         <h3
-          className={`
-            mt-1
-            text-3xl
-            font-extrabold
-            ${styles.value}
-          `}
+          className={`mt-1 text-3xl font-extrabold ${styles.value}`}
         >
           {value}
         </h3>
       </div>
 
       <div
-        className={`
-          rounded-xl
-          p-3
-          ${styles.icon}
-        `}
+        className={`rounded-xl p-3 ${styles.icon}`}
       >
-        <Icon
-          className="
-            h-6
-            w-6
-          "
-        />
+        <Icon className="h-6 w-6" />
       </div>
     </div>
   );
@@ -4126,41 +2825,40 @@ function ContentMetric({
   value,
 }) {
   return (
-    <div
-      className="
-        min-w-0
-        rounded-xl
-        bg-slate-50
-        px-2
-        py-3
-        text-center
-        dark:bg-slate-900/50
-        sm:px-3
-      "
-    >
-      <p
-        className="
-          text-xl
-          font-bold
-          text-slate-900
-          dark:text-white
-        "
-      >
+    <div className="min-w-0 rounded-xl bg-slate-50 px-2 py-3 text-center dark:bg-slate-900/50 sm:px-3">
+      <p className="text-xl font-bold text-slate-900 dark:text-white">
         {value}
       </p>
 
-      <p
-        className="
-          mt-1
-          break-words
-          text-[11px]
-          text-slate-500
-          dark:text-slate-400
-          sm:text-xs
-        "
-      >
+      <p className="mt-1 break-words text-[11px] text-slate-500 dark:text-slate-400 sm:text-xs">
         {label}
       </p>
+    </div>
+  );
+}
+
+function MobileMetric({
+  label,
+  value,
+}) {
+  return (
+    <div>
+      <p className="text-slate-400 dark:text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-1 break-words font-medium text-slate-700 dark:text-slate-200">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function EmptyPublications() {
+  return (
+    <div className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+      Aucune publication ne
+      correspond aux critères.
     </div>
   );
 }
@@ -4177,23 +2875,7 @@ function PaginationButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="
-        inline-flex
-        h-9
-        w-9
-        items-center
-        justify-center
-        rounded-lg
-        border
-        border-slate-200
-        text-slate-600
-        hover:bg-slate-50
-        disabled:cursor-not-allowed
-        disabled:opacity-40
-        dark:border-slate-700
-        dark:text-slate-300
-        dark:hover:bg-slate-700
-      "
+      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
     >
       {children}
     </button>

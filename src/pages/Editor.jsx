@@ -5,6 +5,7 @@ import {
 
 import {
   AlertCircle,
+  ArrowLeft,
   CalendarClock,
   CheckCircle2,
   LoaderCircle,
@@ -16,6 +17,7 @@ import {
 
 import {
   useNavigate,
+  useSearchParams,
 } from 'react-router-dom';
 
 import {
@@ -25,6 +27,7 @@ import {
 
 import {
   createContent,
+  getContent,
   markContentReady,
   updateContent,
 } from '../api/contents';
@@ -57,9 +60,51 @@ function normalizeOptional(
   return trimmed || null;
 }
 
+function contentStatusLabel(
+  status,
+) {
+  const labels = {
+    DRAFT: 'Brouillon',
+    READY: 'Prêt',
+    ARCHIVED: 'Archivé',
+  };
+
+  return (
+    labels[status] ||
+    status ||
+    'Non enregistré'
+  );
+}
+
 export default function Editor() {
   const navigate =
     useNavigate();
+
+  const [
+    searchParams,
+  ] = useSearchParams();
+
+  const editContentId =
+    searchParams.get(
+      'contentId',
+    );
+
+  const editingExisting =
+    Boolean(editContentId);
+
+  const parsedEditContentId =
+    editContentId
+      ? Number(editContentId)
+      : null;
+
+  const invalidEditContentId =
+    Boolean(editContentId) &&
+    (
+      !Number.isInteger(
+        parsedEditContentId,
+      ) ||
+      parsedEditContentId <= 0
+    );
 
   const [title, setTitle] =
     useState('');
@@ -109,6 +154,14 @@ export default function Editor() {
     scheduledAt,
     setScheduledAt,
   ] = useState('');
+
+  const [
+    isLoadingContent,
+    setIsLoadingContent,
+  ] = useState(
+    editingExisting &&
+      !invalidEditContentId,
+  );
 
   const [
     isGenerating,
@@ -175,6 +228,92 @@ export default function Editor() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (
+      !editContentId ||
+      invalidEditContentId
+    ) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    getContent(
+      parsedEditContentId,
+    )
+      .then(
+        (content) => {
+          if (cancelled) {
+            return;
+          }
+
+          setContentId(
+            content.id,
+          );
+
+          setTitle(
+            content.title || '',
+          );
+
+          setBody(
+            content.body || '',
+          );
+
+          setContentStatus(
+            content.status,
+          );
+
+          setSelectedDestinations(
+            [],
+          );
+
+          setScheduledAt('');
+
+          if (
+            content.status ===
+            'ARCHIVED'
+          ) {
+            setSuccess(
+              'Ce contenu est archivé et disponible en lecture seule.',
+            );
+          }
+        },
+      )
+      .catch(
+        (exception) => {
+          if (!cancelled) {
+            setError(
+              getErrorMessage(
+                exception,
+              ),
+            );
+          }
+        },
+      )
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingContent(
+            false,
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    editContentId,
+    invalidEditContentId,
+    parsedEditContentId,
+  ]);
+
+  const displayedError =
+    invalidEditContentId
+      ? 'Identifiant de contenu invalide.'
+      : error;
+
   const linkedinConnected =
     Boolean(
       accounts?.linkedin
@@ -191,14 +330,38 @@ export default function Editor() {
     contentStatus ===
     'READY';
 
+  const isArchived =
+    contentStatus ===
+    'ARCHIVED';
+
   const clearMessages = () => {
     setError('');
     setSuccess('');
   };
 
+  const markLocallyModified =
+    () => {
+      if (
+        contentId &&
+        contentStatus ===
+          'READY'
+      ) {
+        setContentStatus(
+          'DRAFT',
+        );
+      }
+    };
+
   const handleGenerate =
     async () => {
       clearMessages();
+
+      if (isArchived) {
+        setError(
+          'Un contenu archivé ne peut pas être modifié.',
+        );
+        return;
+      }
 
       if (!topic.trim()) {
         setError(
@@ -236,11 +399,15 @@ export default function Editor() {
         );
 
         setContentStatus(
-          null,
+          contentId
+            ? 'DRAFT'
+            : null,
         );
 
         setSuccess(
-          'Le brouillon a été généré. Relisez-le avant de l’enregistrer.',
+          contentId
+            ? 'Le contenu a été remplacé par un nouveau brouillon. Enregistrez puis validez de nouveau.'
+            : 'Le brouillon a été généré. Relisez-le avant de l’enregistrer.',
         );
       } catch (exception) {
         setError(
@@ -258,6 +425,13 @@ export default function Editor() {
   const handleImprove =
     async () => {
       clearMessages();
+
+      if (isArchived) {
+        setError(
+          'Un contenu archivé ne peut pas être modifié.',
+        );
+        return;
+      }
 
       if (
         !title.trim() ||
@@ -331,6 +505,13 @@ export default function Editor() {
     async () => {
       clearMessages();
 
+      if (isArchived) {
+        setError(
+          'Un contenu archivé ne peut pas être modifié.',
+        );
+        return null;
+      }
+
       if (
         !title.trim() ||
         !body.trim()
@@ -380,7 +561,9 @@ export default function Editor() {
         );
 
         setSuccess(
-          `Brouillon enregistré (#${saved.id}).`,
+          contentId
+            ? `Modifications enregistrées (#${saved.id}). Le contenu est maintenant en brouillon et doit être validé de nouveau.`
+            : `Brouillon enregistré (#${saved.id}).`,
         );
 
         return saved;
@@ -400,6 +583,23 @@ export default function Editor() {
   const handleValidate =
     async () => {
       clearMessages();
+
+      if (isArchived) {
+        setError(
+          'Un contenu archivé ne peut pas être validé.',
+        );
+        return;
+      }
+
+      if (
+        !title.trim() ||
+        !body.trim()
+      ) {
+        setError(
+          'Le titre et le contenu sont obligatoires.',
+        );
+        return;
+      }
 
       setIsValidating(true);
 
@@ -503,6 +703,13 @@ export default function Editor() {
   const handlePublish =
     async () => {
       clearMessages();
+
+      if (isArchived) {
+        setError(
+          'Un contenu archivé ne peut pas être publié.',
+        );
+        return;
+      }
 
       if (!contentId) {
         setError(
@@ -611,35 +818,155 @@ export default function Editor() {
       }
     };
 
-  return (
-    <div className="
-      max-w-6xl
-      mx-auto
-      space-y-6
-    ">
-      <div>
-        <h1 className="
-          text-2xl
-          font-bold
-          text-slate-900
-          dark:text-white
-        ">
-          Nouvelle publication
-        </h1>
+  if (
+    editingExisting &&
+    isLoadingContent
+  ) {
+    return (
+      <div
+        className="
+          flex
+          min-h-[60vh]
+          items-center
+          justify-center
+        "
+      >
+        <div
+          className="
+            flex
+            flex-col
+            items-center
+            gap-3
+            text-slate-500
+            dark:text-slate-400
+          "
+        >
+          <LoaderCircle
+            size={32}
+            className="
+              animate-spin
+              text-indigo-600
+            "
+          />
 
-        <p className="
-          mt-1
-          text-sm
-          text-slate-500
-          dark:text-slate-400
-        ">
-          Générez, relisez,
-          validez puis publiez
-          votre contenu.
-        </p>
+          <p className="text-sm">
+            Chargement du contenu...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="
+        max-w-6xl
+        mx-auto
+        space-y-6
+      "
+    >
+      <div
+        className="
+          flex
+          flex-col
+          gap-3
+          sm:flex-row
+          sm:items-start
+          sm:justify-between
+        "
+      >
+        <div>
+          <h1
+            className="
+              text-2xl
+              font-bold
+              text-slate-900
+              dark:text-white
+            "
+          >
+            {editingExisting
+              ? 'Modifier le contenu'
+              : 'Nouvelle publication'}
+          </h1>
+
+          <p
+            className="
+              mt-1
+              text-sm
+              text-slate-500
+              dark:text-slate-400
+            "
+          >
+            {editingExisting
+              ? 'Modifiez le contenu sauvegardé, puis validez-le de nouveau avant publication.'
+              : 'Générez, relisez, validez puis publiez votre contenu.'}
+          </p>
+        </div>
+
+        {editingExisting && (
+          <button
+            type="button"
+            onClick={() =>
+              navigate('/')
+            }
+            className="
+              inline-flex
+              w-full
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border
+              border-slate-200
+              px-4
+              py-2.5
+              text-sm
+              font-medium
+              text-slate-700
+              hover:bg-slate-50
+              dark:border-slate-700
+              dark:text-slate-200
+              dark:hover:bg-slate-700
+              sm:w-auto
+            "
+          >
+            <ArrowLeft
+              size={17}
+            />
+
+            Retour au tableau de bord
+          </button>
+        )}
       </div>
 
-      {error && (
+      {editingExisting &&
+        contentId &&
+        !isArchived && (
+          <div
+            className="
+              rounded-xl
+              border
+              border-amber-200
+              bg-amber-50
+              px-4
+              py-3
+              text-sm
+              text-amber-800
+              dark:border-amber-900
+              dark:bg-amber-950/30
+              dark:text-amber-300
+            "
+          >
+            Vous modifiez le contenu
+            #{contentId}. Toute
+            modification enregistrée
+            repasse le contenu en
+            brouillon et nécessite une
+            nouvelle validation humaine.
+          </div>
+        )}
+
+      {displayedError && (
         <div
           role="alert"
           className="
@@ -649,11 +976,11 @@ export default function Editor() {
             rounded-xl
             border
             border-rose-200
-            dark:border-rose-900
             bg-rose-50
-            dark:bg-rose-950/30
             px-4
             py-3
+            dark:border-rose-900
+            dark:bg-rose-950/30
           "
         >
           <AlertCircle
@@ -665,12 +992,14 @@ export default function Editor() {
             "
           />
 
-          <p className="
-            text-sm
-            text-rose-700
-            dark:text-rose-300
-          ">
-            {error}
+          <p
+            className="
+              text-sm
+              text-rose-700
+              dark:text-rose-300
+            "
+          >
+            {displayedError}
           </p>
         </div>
       )}
@@ -685,11 +1014,11 @@ export default function Editor() {
             rounded-xl
             border
             border-emerald-200
-            dark:border-emerald-900
             bg-emerald-50
-            dark:bg-emerald-950/30
             px-4
             py-3
+            dark:border-emerald-900
+            dark:bg-emerald-950/30
           "
         >
           <CheckCircle2
@@ -701,39 +1030,45 @@ export default function Editor() {
             "
           />
 
-          <p className="
-            text-sm
-            text-emerald-700
-            dark:text-emerald-300
-          ">
+          <p
+            className="
+              text-sm
+              text-emerald-700
+              dark:text-emerald-300
+            "
+          >
             {success}
           </p>
         </div>
       )}
 
-      <div className="
-        grid
-        grid-cols-1
-        gap-6
-        xl:grid-cols-[1fr_320px]
-      ">
-        <section className="
-          rounded-2xl
-          border
-          border-slate-200
-          dark:border-slate-700
-          bg-white
-          dark:bg-slate-800
-          p-6
-          shadow-sm
-          space-y-6
-        ">
+      <div
+        className="
+          grid
+          grid-cols-1
+          gap-6
+          xl:grid-cols-[1fr_320px]
+        "
+      >
+        <section
+          className="
+            space-y-6
+            rounded-2xl
+            border
+            border-slate-200
+            bg-white
+            p-6
+            shadow-sm
+            dark:border-slate-700
+            dark:bg-slate-800
+          "
+        >
           <div>
             <label
               htmlFor="title"
               className="
-                block
                 mb-2
+                block
                 text-sm
                 font-medium
                 text-slate-700
@@ -748,6 +1083,7 @@ export default function Editor() {
               type="text"
               maxLength={255}
               value={title}
+              disabled={isArchived}
               onChange={(
                 event,
               ) => {
@@ -756,14 +1092,7 @@ export default function Editor() {
                     .value,
                 );
 
-                if (
-                  contentId &&
-                  isReady
-                ) {
-                  setContentStatus(
-                    'DRAFT',
-                  );
-                }
+                markLocallyModified();
               }}
               placeholder="Titre de la publication"
               className="
@@ -771,16 +1100,18 @@ export default function Editor() {
                 rounded-xl
                 border
                 border-slate-300
-                dark:border-slate-600
                 bg-transparent
                 px-4
                 py-3
                 text-slate-900
-                dark:text-white
                 outline-none
                 focus:border-indigo-500
                 focus:ring-2
                 focus:ring-indigo-500/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+                dark:border-slate-600
+                dark:text-white
               "
             />
           </div>
@@ -789,8 +1120,8 @@ export default function Editor() {
             <label
               htmlFor="body"
               className="
-                block
                 mb-2
+                block
                 text-sm
                 font-medium
                 text-slate-700
@@ -804,6 +1135,7 @@ export default function Editor() {
               id="body"
               rows={15}
               value={body}
+              disabled={isArchived}
               onChange={(
                 event,
               ) => {
@@ -812,14 +1144,7 @@ export default function Editor() {
                     .value,
                 );
 
-                if (
-                  contentId &&
-                  isReady
-                ) {
-                  setContentStatus(
-                    'DRAFT',
-                  );
-                }
+                markLocallyModified();
               }}
               placeholder="Rédigez ou générez votre contenu..."
               className="
@@ -828,43 +1153,51 @@ export default function Editor() {
                 rounded-xl
                 border
                 border-slate-300
-                dark:border-slate-600
                 bg-transparent
                 px-4
                 py-3
                 text-slate-900
-                dark:text-white
                 outline-none
                 focus:border-indigo-500
                 focus:ring-2
                 focus:ring-indigo-500/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+                dark:border-slate-600
+                dark:text-white
               "
             />
           </div>
 
-          <div className="
-            flex
-            flex-wrap
-            items-center
-            justify-between
-            gap-3
-            border-t
-            border-slate-200
-            dark:border-slate-700
-            pt-5
-          ">
-            <div className="
-              text-sm
-              text-slate-500
-              dark:text-slate-400
-            ">
+          <div
+            className="
+              flex
+              flex-wrap
+              items-center
+              justify-between
+              gap-3
+              border-t
+              border-slate-200
+              pt-5
+              dark:border-slate-700
+            "
+          >
+            <div
+              className="
+                text-sm
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
               {contentId ? (
                 <>
                   Contenu #
                   {contentId}
                   {' · '}
                   <strong>
-                    {contentStatus}
+                    {contentStatusLabel(
+                      contentStatus,
+                    )}
                   </strong>
                 </>
               ) : (
@@ -872,117 +1205,129 @@ export default function Editor() {
               )}
             </div>
 
-            <div className="
-              flex
-              flex-wrap
-              gap-2
-            ">
-              <button
-                type="button"
-                disabled={
-                  isSaving ||
-                  isValidating
-                }
-                onClick={
-                  saveDraft
-                }
+            {!isArchived && (
+              <div
                 className="
-                  inline-flex
-                  items-center
+                  flex
+                  flex-wrap
                   gap-2
-                  rounded-xl
-                  border
-                  border-slate-300
-                  dark:border-slate-600
-                  px-4
-                  py-2.5
-                  text-sm
-                  font-medium
-                  text-slate-700
-                  dark:text-slate-200
-                  hover:bg-slate-50
-                  dark:hover:bg-slate-700
-                  disabled:opacity-50
                 "
               >
-                {isSaving ? (
-                  <LoaderCircle
-                    size={17}
-                    className="
-                      animate-spin
-                    "
-                  />
-                ) : (
-                  <Save
-                    size={17}
-                  />
-                )}
+                <button
+                  type="button"
+                  disabled={
+                    isSaving ||
+                    isValidating
+                  }
+                  onClick={
+                    saveDraft
+                  }
+                  className="
+                    inline-flex
+                    items-center
+                    gap-2
+                    rounded-xl
+                    border
+                    border-slate-300
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-medium
+                    text-slate-700
+                    hover:bg-slate-50
+                    disabled:opacity-50
+                    dark:border-slate-600
+                    dark:text-slate-200
+                    dark:hover:bg-slate-700
+                  "
+                >
+                  {isSaving ? (
+                    <LoaderCircle
+                      size={17}
+                      className="
+                        animate-spin
+                      "
+                    />
+                  ) : (
+                    <Save
+                      size={17}
+                    />
+                  )}
 
-                Enregistrer
-              </button>
+                  {editingExisting
+                    ? 'Enregistrer les modifications'
+                    : 'Enregistrer'}
+                </button>
 
-              <button
-                type="button"
-                disabled={
-                  isValidating ||
-                  isSaving
-                }
-                onClick={
-                  handleValidate
-                }
-                className="
-                  inline-flex
-                  items-center
-                  gap-2
-                  rounded-xl
-                  bg-emerald-600
-                  px-4
-                  py-2.5
-                  text-sm
-                  font-medium
-                  text-white
-                  hover:bg-emerald-700
-                  disabled:opacity-50
-                "
-              >
-                {isValidating ? (
-                  <LoaderCircle
-                    size={17}
-                    className="
-                      animate-spin
-                    "
-                  />
-                ) : (
-                  <CheckCircle2
-                    size={17}
-                  />
-                )}
+                <button
+                  type="button"
+                  disabled={
+                    isValidating ||
+                    isSaving
+                  }
+                  onClick={
+                    handleValidate
+                  }
+                  className="
+                    inline-flex
+                    items-center
+                    gap-2
+                    rounded-xl
+                    bg-emerald-600
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-medium
+                    text-white
+                    hover:bg-emerald-700
+                    disabled:opacity-50
+                  "
+                >
+                  {isValidating ? (
+                    <LoaderCircle
+                      size={17}
+                      className="
+                        animate-spin
+                      "
+                    />
+                  ) : (
+                    <CheckCircle2
+                      size={17}
+                    />
+                  )}
 
-                Valider
-              </button>
-            </div>
+                  Valider
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
-        <aside className="
-          space-y-5
-        ">
-          <section className="
-            rounded-2xl
-            border
-            border-slate-200
-            dark:border-slate-700
-            bg-white
-            dark:bg-slate-800
-            p-5
-            shadow-sm
-            space-y-4
-          ">
-            <div className="
-              flex
-              items-center
-              gap-2
-            ">
+        <aside
+          className="
+            space-y-5
+          "
+        >
+          <section
+            className="
+              space-y-4
+              rounded-2xl
+              border
+              border-slate-200
+              bg-white
+              p-5
+              shadow-sm
+              dark:border-slate-700
+              dark:bg-slate-800
+            "
+          >
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+              "
+            >
               <Sparkles
                 size={19}
                 className="
@@ -990,11 +1335,13 @@ export default function Editor() {
                 "
               />
 
-              <h2 className="
-                font-semibold
-                text-slate-900
-                dark:text-white
-              ">
+              <h2
+                className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                "
+              >
                 Assistant Gemini
               </h2>
             </div>
@@ -1003,8 +1350,8 @@ export default function Editor() {
               <label
                 htmlFor="topic"
                 className="
-                  block
                   mb-1.5
+                  block
                   text-xs
                   font-medium
                   text-slate-600
@@ -1019,6 +1366,7 @@ export default function Editor() {
                 rows={3}
                 maxLength={500}
                 value={topic}
+                disabled={isArchived}
                 onChange={(
                   event,
                 ) =>
@@ -1034,37 +1382,43 @@ export default function Editor() {
                   rounded-xl
                   border
                   border-slate-300
-                  dark:border-slate-600
                   bg-transparent
                   px-3
                   py-2.5
                   text-sm
-                  dark:text-white
                   outline-none
                   focus:border-violet-500
+                  disabled:opacity-60
+                  dark:border-slate-600
+                  dark:text-white
                 "
               />
             </div>
 
-            <div className="
-              grid
-              grid-cols-2
-              gap-3
-            ">
+            <div
+              className="
+                grid
+                grid-cols-2
+                gap-3
+              "
+            >
               <div>
-                <label className="
-                  block
-                  mb-1.5
-                  text-xs
-                  font-medium
-                  text-slate-600
-                  dark:text-slate-400
-                ">
+                <label
+                  className="
+                    mb-1.5
+                    block
+                    text-xs
+                    font-medium
+                    text-slate-600
+                    dark:text-slate-400
+                  "
+                >
                   Ton
                 </label>
 
                 <select
                   value={tone}
+                  disabled={isArchived}
                   onChange={(
                     event,
                   ) =>
@@ -1078,12 +1432,13 @@ export default function Editor() {
                     rounded-xl
                     border
                     border-slate-300
-                    dark:border-slate-600
                     bg-white
-                    dark:bg-slate-900
                     px-3
                     py-2.5
                     text-sm
+                    disabled:opacity-60
+                    dark:border-slate-600
+                    dark:bg-slate-900
                     dark:text-white
                   "
                 >
@@ -1106,14 +1461,16 @@ export default function Editor() {
               </div>
 
               <div>
-                <label className="
-                  block
-                  mb-1.5
-                  text-xs
-                  font-medium
-                  text-slate-600
-                  dark:text-slate-400
-                ">
+                <label
+                  className="
+                    mb-1.5
+                    block
+                    text-xs
+                    font-medium
+                    text-slate-600
+                    dark:text-slate-400
+                  "
+                >
                   Langue
                 </label>
 
@@ -1121,6 +1478,7 @@ export default function Editor() {
                   value={
                     language
                   }
+                  disabled={isArchived}
                   onChange={(
                     event,
                   ) =>
@@ -1134,12 +1492,13 @@ export default function Editor() {
                     rounded-xl
                     border
                     border-slate-300
-                    dark:border-slate-600
                     bg-white
-                    dark:bg-slate-900
                     px-3
                     py-2.5
                     text-sm
+                    disabled:opacity-60
+                    dark:border-slate-600
+                    dark:bg-slate-900
                     dark:text-white
                   "
                 >
@@ -1160,11 +1519,12 @@ export default function Editor() {
                 handleGenerate
               }
               disabled={
-                isGenerating
+                isGenerating ||
+                isArchived
               }
               className="
-                w-full
                 inline-flex
+                w-full
                 items-center
                 justify-center
                 gap-2
@@ -1195,17 +1555,19 @@ export default function Editor() {
               Générer
             </button>
 
-            <div className="
-              border-t
-              border-slate-200
-              dark:border-slate-700
-              pt-4
-            ">
+            <div
+              className="
+                border-t
+                border-slate-200
+                pt-4
+                dark:border-slate-700
+              "
+            >
               <label
                 htmlFor="instruction"
                 className="
-                  block
                   mb-1.5
+                  block
                   text-xs
                   font-medium
                   text-slate-600
@@ -1223,6 +1585,7 @@ export default function Editor() {
                 value={
                   instruction
                 }
+                disabled={isArchived}
                 onChange={(
                   event,
                 ) =>
@@ -1237,13 +1600,14 @@ export default function Editor() {
                   rounded-xl
                   border
                   border-slate-300
-                  dark:border-slate-600
                   bg-transparent
                   px-3
                   py-2.5
                   text-sm
-                  dark:text-white
                   outline-none
+                  disabled:opacity-60
+                  dark:border-slate-600
+                  dark:text-white
                 "
               />
 
@@ -1253,28 +1617,29 @@ export default function Editor() {
                   handleImprove
                 }
                 disabled={
-                  isImproving
+                  isImproving ||
+                  isArchived
                 }
                 className="
                   mt-3
-                  w-full
                   inline-flex
+                  w-full
                   items-center
                   justify-center
                   gap-2
                   rounded-xl
                   border
                   border-violet-300
-                  dark:border-violet-700
                   px-4
                   py-2.5
                   text-sm
                   font-medium
                   text-violet-700
-                  dark:text-violet-300
                   hover:bg-violet-50
-                  dark:hover:bg-violet-950/30
                   disabled:opacity-50
+                  dark:border-violet-700
+                  dark:text-violet-300
+                  dark:hover:bg-violet-950/30
                 "
               >
                 {isImproving ? (
@@ -1295,22 +1660,26 @@ export default function Editor() {
             </div>
           </section>
 
-          <section className="
-            rounded-2xl
-            border
-            border-slate-200
-            dark:border-slate-700
-            bg-white
-            dark:bg-slate-800
-            p-5
-            shadow-sm
-            space-y-4
-          ">
-            <div className="
-              flex
-              items-center
-              gap-2
-            ">
+          <section
+            className="
+              space-y-4
+              rounded-2xl
+              border
+              border-slate-200
+              bg-white
+              p-5
+              shadow-sm
+              dark:border-slate-700
+              dark:bg-slate-800
+            "
+          >
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+              "
+            >
               <Send
                 size={19}
                 className="
@@ -1318,24 +1687,28 @@ export default function Editor() {
                 "
               />
 
-              <h2 className="
-                font-semibold
-                text-slate-900
-                dark:text-white
-              ">
+              <h2
+                className="
+                  font-semibold
+                  text-slate-900
+                  dark:text-white
+                "
+              >
                 Publication
               </h2>
             </div>
 
             {!isReady && (
-              <p className="
-                text-xs
-                text-amber-600
-                dark:text-amber-400
-              ">
-                Validez d’abord le
-                contenu pour activer
-                la publication.
+              <p
+                className="
+                  text-xs
+                  text-amber-600
+                  dark:text-amber-400
+                "
+              >
+                {isArchived
+                  ? 'Le contenu archivé ne peut plus être publié.'
+                  : 'Validez d’abord le contenu pour activer la publication.'}
               </p>
             )}
 
@@ -1349,6 +1722,9 @@ export default function Editor() {
                 selectedDestinations.includes(
                   'LINKEDIN',
                 )
+              }
+              disabled={
+                isArchived
               }
               onChange={
                 toggleDestination
@@ -1366,6 +1742,9 @@ export default function Editor() {
                   'WORDPRESS',
                 )
               }
+              disabled={
+                isArchived
+              }
               onChange={
                 toggleDestination
               }
@@ -1375,10 +1754,10 @@ export default function Editor() {
               <label
                 htmlFor="scheduledAt"
                 className="
+                  mb-2
                   flex
                   items-center
                   gap-2
-                  mb-2
                   text-xs
                   font-medium
                   text-slate-600
@@ -1399,6 +1778,7 @@ export default function Editor() {
                 value={
                   scheduledAt
                 }
+                disabled={isArchived}
                 onChange={(
                   event,
                 ) =>
@@ -1412,20 +1792,23 @@ export default function Editor() {
                   rounded-xl
                   border
                   border-slate-300
-                  dark:border-slate-600
                   bg-transparent
                   px-3
                   py-2.5
                   text-sm
+                  disabled:opacity-60
+                  dark:border-slate-600
                   dark:text-white
                 "
               />
 
-              <p className="
-                mt-1.5
-                text-xs
-                text-slate-400
-              ">
+              <p
+                className="
+                  mt-1.5
+                  text-xs
+                  text-slate-400
+                "
+              >
                 Laissez vide pour
                 publier immédiatement.
               </p>
@@ -1435,14 +1818,15 @@ export default function Editor() {
               type="button"
               disabled={
                 !isReady ||
-                isPublishing
+                isPublishing ||
+                isArchived
               }
               onClick={
                 handlePublish
               }
               className="
-                w-full
                 inline-flex
+                w-full
                 items-center
                 justify-center
                 gap-2
@@ -1487,8 +1871,13 @@ function DestinationCheckbox({
   value,
   connected,
   checked,
+  disabled = false,
   onChange,
 }) {
+  const available =
+    connected &&
+    !disabled;
+
   return (
     <label
       className={`
@@ -1501,27 +1890,31 @@ function DestinationCheckbox({
         px-3
         py-3
         ${
-          connected
-            ? 'border-slate-200 dark:border-slate-700 cursor-pointer'
-            : 'border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed'
+          available
+            ? 'cursor-pointer border-slate-200 dark:border-slate-700'
+            : 'cursor-not-allowed border-slate-200 opacity-50 dark:border-slate-700'
         }
       `}
     >
       <div>
-        <p className="
-          text-sm
-          font-medium
-          text-slate-800
-          dark:text-slate-200
-        ">
+        <p
+          className="
+            text-sm
+            font-medium
+            text-slate-800
+            dark:text-slate-200
+          "
+        >
           {label}
         </p>
 
-        <p className="
-          text-xs
-          text-slate-500
-          dark:text-slate-400
-        ">
+        <p
+          className="
+            text-xs
+            text-slate-500
+            dark:text-slate-400
+          "
+        >
           {connected
             ? 'Compte connecté'
             : 'Compte non connecté'}
@@ -1531,7 +1924,7 @@ function DestinationCheckbox({
       <input
         type="checkbox"
         disabled={
-          !connected
+          !available
         }
         checked={
           checked
