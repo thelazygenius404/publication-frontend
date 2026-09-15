@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Ban,
   BarChart3,
+  BookOpen,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -75,6 +76,23 @@ const STATUS_STYLES = {
 
   CANCELLED:
     'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+};
+
+const CONTENT_STATUS_LABELS = {
+  DRAFT: 'Brouillon',
+  READY: 'Prêt',
+  ARCHIVED: 'Archivé',
+};
+
+const CONTENT_STATUS_STYLES = {
+  DRAFT:
+    'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+
+  READY:
+    'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+
+  ARCHIVED:
+    'border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-400',
 };
 
 function getErrorMessage(
@@ -189,6 +207,35 @@ function StatusBadge({
       `}
     >
       {STATUS_LABELS[
+        status
+      ] || status}
+    </span>
+  );
+}
+
+function ContentStatusBadge({
+  status,
+}) {
+  return (
+    <span
+      className={`
+        inline-flex
+        shrink-0
+        rounded-full
+        border
+        px-2.5
+        py-1
+        text-xs
+        font-semibold
+        ${
+          CONTENT_STATUS_STYLES[
+            status
+          ] ||
+          'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+        }
+      `}
+    >
+      {CONTENT_STATUS_LABELS[
         status
       ] || status}
     </span>
@@ -384,6 +431,16 @@ export default function Dashboard() {
     setCancellingId,
   ] = useState(null);
 
+  const [
+    showContents,
+    setShowContents,
+  ] = useState(false);
+
+  const [
+    selectedContent,
+    setSelectedContent,
+  ] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -450,6 +507,23 @@ export default function Dashboard() {
       cancelled = true;
     };
   }, [reloadKey]);
+
+  const contentById =
+    useMemo(() => {
+      const map =
+        new Map();
+
+      contents.forEach(
+        (content) => {
+          map.set(
+            Number(content.id),
+            content,
+          );
+        },
+      );
+
+      return map;
+    }, [contents]);
 
   const publishedCount =
     publications.filter(
@@ -1077,45 +1151,54 @@ export default function Dashboard() {
               mb-4
               flex
               items-center
-              gap-3
+              justify-between
+              gap-4
             "
           >
             <div
               className="
-                rounded-xl
-                bg-indigo-50
-                p-2.5
-                text-indigo-600
-                dark:bg-indigo-950/40
-                dark:text-indigo-400
+                flex
+                items-center
+                gap-3
               "
             >
-              <FileText
-                size={20}
-              />
-            </div>
-
-            <div>
-              <h2
+              <div
                 className="
-                  font-semibold
-                  text-slate-900
-                  dark:text-white
+                  rounded-xl
+                  bg-indigo-50
+                  p-2.5
+                  text-indigo-600
+                  dark:bg-indigo-950/40
+                  dark:text-indigo-400
                 "
               >
-                Contenus
-              </h2>
+                <FileText
+                  size={20}
+                />
+              </div>
 
-              <p
-                className="
-                  text-xs
-                  text-slate-500
-                  dark:text-slate-400
-                "
-              >
-                État de préparation
-                des contenus
-              </p>
+              <div>
+                <h2
+                  className="
+                    font-semibold
+                    text-slate-900
+                    dark:text-white
+                  "
+                >
+                  Contenus
+                </h2>
+
+                <p
+                  className="
+                    text-xs
+                    text-slate-500
+                    dark:text-slate-400
+                  "
+                >
+                  État de préparation
+                  des contenus
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1148,6 +1231,50 @@ export default function Dashboard() {
               }
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setShowContents(
+                true,
+              )
+            }
+            disabled={
+              contents.length ===
+              0
+            }
+            className="
+              mt-4
+              inline-flex
+              w-full
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border
+              border-indigo-200
+              bg-indigo-50
+              px-4
+              py-2.5
+              text-sm
+              font-semibold
+              text-indigo-700
+              transition-colors
+              hover:bg-indigo-100
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+              dark:border-indigo-900
+              dark:bg-indigo-950/30
+              dark:text-indigo-300
+              dark:hover:bg-indigo-950/50
+            "
+          >
+            <BookOpen
+              size={17}
+            />
+
+            Voir les contenus
+          </button>
         </section>
 
         <section
@@ -1645,7 +1772,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Mobile cards */}
         <div
           className="
             border-t
@@ -1849,23 +1975,9 @@ export default function Dashboard() {
                             dark:hover:bg-rose-950/30
                           "
                         >
-                          {cancellingId ===
-                          publication.id ? (
-                            <LoaderCircle
-                              size={
-                                15
-                              }
-                              className="
-                                animate-spin
-                              "
-                            />
-                          ) : (
-                            <Ban
-                              size={
-                                15
-                              }
-                            />
-                          )}
+                          <Ban
+                            size={15}
+                          />
 
                           Annuler
                         </button>
@@ -1892,7 +2004,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Desktop / tablet table */}
         <div
           className="
             hidden
@@ -1923,48 +2034,23 @@ export default function Dashboard() {
               "
             >
               <tr>
-                <th
-                  className="
-                    px-5
-                    py-3
-                  "
-                >
+                <th className="px-5 py-3">
                   Publication
                 </th>
 
-                <th
-                  className="
-                    px-5
-                    py-3
-                  "
-                >
+                <th className="px-5 py-3">
                   Destination
                 </th>
 
-                <th
-                  className="
-                    px-5
-                    py-3
-                  "
-                >
+                <th className="px-5 py-3">
                   Statut
                 </th>
 
-                <th
-                  className="
-                    px-5
-                    py-3
-                  "
-                >
+                <th className="px-5 py-3">
                   Planifiée
                 </th>
 
-                <th
-                  className="
-                    px-5
-                    py-3
-                  "
-                >
+                <th className="px-5 py-3">
                   Publiée
                 </th>
 
@@ -2133,9 +2219,7 @@ export default function Dashboard() {
                             "
                           >
                             <Eye
-                              size={
-                                15
-                              }
+                              size={15}
                             />
 
                             Détails
@@ -2174,23 +2258,9 @@ export default function Dashboard() {
                                 dark:hover:bg-rose-950/30
                               "
                             >
-                              {cancellingId ===
-                              publication.id ? (
-                                <LoaderCircle
-                                  size={
-                                    15
-                                  }
-                                  className="
-                                    animate-spin
-                                  "
-                                />
-                              ) : (
-                                <Ban
-                                  size={
-                                    15
-                                  }
-                                />
-                              )}
+                              <Ban
+                                size={15}
+                              />
 
                               Annuler
                             </button>
@@ -2340,15 +2410,79 @@ export default function Dashboard() {
         </div>
       </section>
 
+      {showContents && (
+        <ContentsModal
+          contents={
+            contents
+          }
+          onRead={(
+            content,
+          ) => {
+            setSelectedContent(
+              content,
+            );
+
+            setShowContents(
+              false,
+            );
+          }}
+          onClose={() =>
+            setShowContents(
+              false,
+            )
+          }
+        />
+      )}
+
+      {selectedContent && (
+        <ContentReaderModal
+          content={
+            selectedContent
+          }
+          onBack={() => {
+            setSelectedContent(
+              null,
+            );
+
+            setShowContents(
+              true,
+            );
+          }}
+          onClose={() =>
+            setSelectedContent(
+              null,
+            )
+          }
+        />
+      )}
+
       {selectedPublication && (
         <PublicationDetailsModal
           publication={
             selectedPublication
           }
+          content={
+            contentById.get(
+              Number(
+                selectedPublication.contentId,
+              ),
+            ) || null
+          }
           cancelling={
             cancellingId ===
             selectedPublication.id
           }
+          onReadContent={(
+            content,
+          ) => {
+            setSelectedPublication(
+              null,
+            );
+
+            setSelectedContent(
+              content,
+            );
+          }}
           onCancel={(
             publication,
           ) =>
@@ -2385,6 +2519,791 @@ export default function Dashboard() {
           }
         />
       )}
+    </div>
+  );
+}
+
+function ContentsModal({
+  contents,
+  onRead,
+  onClose,
+}) {
+  const [
+    search,
+    setSearch,
+  ] = useState('');
+
+  const [
+    status,
+    setStatus,
+  ] = useState('ALL');
+
+  const filteredContents =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase();
+
+      return contents.filter(
+        (content) => {
+          const matchesSearch =
+            !query ||
+            content.title
+              ?.toLowerCase()
+              .includes(query) ||
+            content.body
+              ?.toLowerCase()
+              .includes(query);
+
+          const matchesStatus =
+            status === 'ALL' ||
+            content.status ===
+              status;
+
+          return (
+            matchesSearch &&
+            matchesStatus
+          );
+        },
+      );
+    }, [
+      contents,
+      search,
+      status,
+    ]);
+
+  return (
+    <div
+      className="
+        fixed
+        inset-0
+        z-50
+        flex
+        items-center
+        justify-center
+        bg-slate-950/60
+        p-3
+        backdrop-blur-sm
+        sm:p-4
+      "
+      onMouseDown={(
+        event,
+      ) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="contents-title"
+        className="
+          flex
+          max-h-[92vh]
+          w-full
+          max-w-4xl
+          flex-col
+          overflow-hidden
+          rounded-2xl
+          border
+          border-slate-200
+          bg-white
+          shadow-2xl
+          dark:border-slate-700
+          dark:bg-slate-800
+        "
+      >
+        <div
+          className="
+            flex
+            items-start
+            justify-between
+            gap-4
+            border-b
+            border-slate-200
+            px-4
+            py-4
+            dark:border-slate-700
+            sm:px-6
+            sm:py-5
+          "
+        >
+          <div>
+            <p
+              className="
+                text-xs
+                font-semibold
+                uppercase
+                tracking-wide
+                text-indigo-600
+                dark:text-indigo-400
+              "
+            >
+              Bibliothèque
+            </p>
+
+            <h2
+              id="contents-title"
+              className="
+                mt-1
+                text-xl
+                font-bold
+                text-slate-900
+                dark:text-white
+              "
+            >
+              Mes contenus
+            </h2>
+
+            <p
+              className="
+                mt-1
+                text-sm
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              {
+                contents.length
+              } contenu(s)
+              sauvegardé(s)
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className="
+              rounded-lg
+              p-2
+              text-slate-500
+              hover:bg-slate-100
+              dark:hover:bg-slate-700
+            "
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div
+          className="
+            space-y-3
+            border-b
+            border-slate-200
+            p-4
+            dark:border-slate-700
+            sm:p-5
+          "
+        >
+          <div
+            className="
+              relative
+            "
+          >
+            <Search
+              size={17}
+              className="
+                absolute
+                left-3.5
+                top-1/2
+                -translate-y-1/2
+                text-slate-400
+              "
+            />
+
+            <input
+              type="text"
+              value={search}
+              onChange={(
+                event,
+              ) =>
+                setSearch(
+                  event.target
+                    .value,
+                )
+              }
+              placeholder="Rechercher un contenu..."
+              className="
+                w-full
+                rounded-xl
+                border
+                border-slate-200
+                bg-slate-50
+                py-2.5
+                pl-10
+                pr-4
+                text-sm
+                text-slate-900
+                outline-none
+                focus:border-indigo-500
+                focus:ring-2
+                focus:ring-indigo-500/20
+                dark:border-slate-700
+                dark:bg-slate-900
+                dark:text-white
+              "
+            />
+          </div>
+
+          <div
+            className="
+              flex
+              flex-wrap
+              gap-2
+            "
+          >
+            {[
+              [
+                'ALL',
+                'Tous',
+              ],
+              [
+                'DRAFT',
+                'Brouillons',
+              ],
+              [
+                'READY',
+                'Prêts',
+              ],
+              [
+                'ARCHIVED',
+                'Archivés',
+              ],
+            ].map(
+              ([
+                value,
+                label,
+              ]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setStatus(
+                      value,
+                    )
+                  }
+                  className={`
+                    rounded-lg
+                    border
+                    px-3
+                    py-2
+                    text-xs
+                    font-semibold
+                    transition-colors
+                    ${
+                      status ===
+                      value
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'
+                    }
+                  `}
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+
+        <div
+          className="
+            flex-1
+            overflow-y-auto
+            p-4
+            sm:p-5
+          "
+        >
+          {filteredContents.length >
+          0 ? (
+            <div
+              className="
+                space-y-3
+              "
+            >
+              {filteredContents.map(
+                (content) => (
+                  <article
+                    key={
+                      content.id
+                    }
+                    className="
+                      rounded-xl
+                      border
+                      border-slate-200
+                      p-4
+                      transition-colors
+                      hover:bg-slate-50
+                      dark:border-slate-700
+                      dark:hover:bg-slate-700/30
+                    "
+                  >
+                    <div
+                      className="
+                        flex
+                        flex-col
+                        gap-4
+                        sm:flex-row
+                        sm:items-center
+                        sm:justify-between
+                      "
+                    >
+                      <div
+                        className="
+                          min-w-0
+                          flex-1
+                        "
+                      >
+                        <div
+                          className="
+                            flex
+                            flex-wrap
+                            items-center
+                            gap-2
+                          "
+                        >
+                          <ContentStatusBadge
+                            status={
+                              content.status
+                            }
+                          />
+
+                          <span
+                            className="
+                              text-xs
+                              text-slate-400
+                            "
+                          >
+                            contenu #
+                            {
+                              content.id
+                            }
+                          </span>
+                        </div>
+
+                        <h3
+                          className="
+                            mt-2
+                            break-words
+                            font-semibold
+                            text-slate-900
+                            dark:text-white
+                          "
+                        >
+                          {content.title ||
+                            'Sans titre'}
+                        </h3>
+
+                        <p
+                          className="
+                            mt-2
+                            line-clamp-2
+                            whitespace-pre-wrap
+                            text-sm
+                            leading-6
+                            text-slate-500
+                            dark:text-slate-400
+                          "
+                        >
+                          {content.body ||
+                            'Aucun contenu.'}
+                        </p>
+
+                        <p
+                          className="
+                            mt-2
+                            text-xs
+                            text-slate-400
+                          "
+                        >
+                          Modifié le{' '}
+                          {formatDate(
+                            content.updatedAt,
+                          )}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onRead(
+                            content,
+                          )
+                        }
+                        className="
+                          inline-flex
+                          shrink-0
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-xl
+                          bg-indigo-600
+                          px-4
+                          py-2.5
+                          text-sm
+                          font-semibold
+                          text-white
+                          hover:bg-indigo-700
+                        "
+                      >
+                        <BookOpen
+                          size={16}
+                        />
+
+                        Lire
+                      </button>
+                    </div>
+                  </article>
+                ),
+              )}
+            </div>
+          ) : (
+            <div
+              className="
+                flex
+                min-h-56
+                flex-col
+                items-center
+                justify-center
+                text-center
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              <FileText
+                size={36}
+                className="
+                  mb-3
+                  opacity-40
+                "
+              />
+
+              <p
+                className="
+                  text-sm
+                  font-medium
+                "
+              >
+                Aucun contenu trouvé.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            border-t
+            border-slate-200
+            px-4
+            py-3
+            dark:border-slate-700
+            sm:px-5
+          "
+        >
+          <p
+            className="
+              text-xs
+              text-slate-500
+              dark:text-slate-400
+            "
+          >
+            {
+              filteredContents.length
+            } résultat(s)
+          </p>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="
+              rounded-xl
+              border
+              border-slate-200
+              px-4
+              py-2
+              text-sm
+              font-medium
+              text-slate-700
+              hover:bg-slate-50
+              dark:border-slate-700
+              dark:text-slate-200
+              dark:hover:bg-slate-700
+            "
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentReaderModal({
+  content,
+  onBack,
+  onClose,
+}) {
+  return (
+    <div
+      className="
+        fixed
+        inset-0
+        z-[55]
+        flex
+        items-center
+        justify-center
+        bg-slate-950/60
+        p-3
+        backdrop-blur-sm
+        sm:p-4
+      "
+      onMouseDown={(
+        event,
+      ) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="content-reader-title"
+        className="
+          max-h-[92vh]
+          w-full
+          max-w-3xl
+          overflow-y-auto
+          rounded-2xl
+          border
+          border-slate-200
+          bg-white
+          shadow-2xl
+          dark:border-slate-700
+          dark:bg-slate-800
+        "
+      >
+        <div
+          className="
+            flex
+            items-start
+            justify-between
+            gap-4
+            border-b
+            border-slate-200
+            px-4
+            py-4
+            dark:border-slate-700
+            sm:px-6
+            sm:py-5
+          "
+        >
+          <div
+            className="
+              min-w-0
+              flex-1
+            "
+          >
+            <div
+              className="
+                flex
+                flex-wrap
+                items-center
+                gap-2
+              "
+            >
+              <ContentStatusBadge
+                status={
+                  content.status
+                }
+              />
+
+              <span
+                className="
+                  text-xs
+                  text-slate-400
+                "
+              >
+                Contenu #
+                {
+                  content.id
+                }
+              </span>
+            </div>
+
+            <h2
+              id="content-reader-title"
+              className="
+                mt-3
+                break-words
+                text-xl
+                font-bold
+                leading-7
+                text-slate-900
+                dark:text-white
+              "
+            >
+              {content.title ||
+                'Sans titre'}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className="
+              shrink-0
+              rounded-lg
+              p-2
+              text-slate-500
+              hover:bg-slate-100
+              dark:hover:bg-slate-700
+            "
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div
+          className="
+            p-4
+            sm:p-6
+          "
+        >
+          <div
+            className="
+              mb-5
+              grid
+              grid-cols-1
+              gap-3
+              sm:grid-cols-2
+            "
+          >
+            <DetailItem
+              label="Créé"
+              value={formatDate(
+                content.createdAt,
+              )}
+            />
+
+            <DetailItem
+              label="Dernière modification"
+              value={formatDate(
+                content.updatedAt,
+              )}
+            />
+          </div>
+
+          <div
+            className="
+              rounded-2xl
+              border
+              border-slate-200
+              bg-slate-50
+              p-4
+              dark:border-slate-700
+              dark:bg-slate-900/50
+              sm:p-5
+            "
+          >
+            <p
+              className="
+                mb-3
+                text-xs
+                font-semibold
+                uppercase
+                tracking-wide
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              Contenu
+            </p>
+
+            <div
+              className="
+                whitespace-pre-wrap
+                break-words
+                text-sm
+                leading-7
+                text-slate-800
+                dark:text-slate-200
+              "
+            >
+              {content.body ||
+                'Aucun contenu.'}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="
+            flex
+            flex-col-reverse
+            gap-2
+            border-t
+            border-slate-200
+            px-4
+            py-4
+            dark:border-slate-700
+            sm:flex-row
+            sm:justify-end
+            sm:px-6
+          "
+        >
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="
+                rounded-xl
+                border
+                border-slate-200
+                px-4
+                py-2.5
+                text-sm
+                font-medium
+                text-slate-700
+                hover:bg-slate-50
+                dark:border-slate-700
+                dark:text-slate-200
+                dark:hover:bg-slate-700
+              "
+            >
+              Retour aux contenus
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="
+              rounded-xl
+              bg-indigo-600
+              px-4
+              py-2.5
+              text-sm
+              font-semibold
+              text-white
+              hover:bg-indigo-700
+            "
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2635,8 +3554,10 @@ function CancelPublicationModal({
 
 function PublicationDetailsModal({
   publication,
+  content,
   cancelling,
   onCancel,
+  onReadContent,
   onClose,
 }) {
   const canCancel =
@@ -2852,6 +3773,113 @@ function PublicationDetailsModal({
               )}
             />
           </div>
+
+          {content && (
+            <div
+              className="
+                sm:col-span-2
+              "
+            >
+              <div
+                className="
+                  rounded-xl
+                  border
+                  border-indigo-200
+                  bg-indigo-50
+                  p-4
+                  dark:border-indigo-900
+                  dark:bg-indigo-950/20
+                "
+              >
+                <div
+                  className="
+                    flex
+                    flex-col
+                    gap-3
+                    sm:flex-row
+                    sm:items-center
+                    sm:justify-between
+                  "
+                >
+                  <div
+                    className="
+                      min-w-0
+                    "
+                  >
+                    <p
+                      className="
+                        text-xs
+                        font-semibold
+                        uppercase
+                        tracking-wide
+                        text-indigo-600
+                        dark:text-indigo-400
+                      "
+                    >
+                      Contenu associé
+                    </p>
+
+                    <p
+                      className="
+                        mt-1
+                        break-words
+                        text-sm
+                        font-semibold
+                        text-slate-900
+                        dark:text-white
+                      "
+                    >
+                      {content.title}
+                    </p>
+
+                    <p
+                      className="
+                        mt-1
+                        line-clamp-2
+                        whitespace-pre-wrap
+                        text-xs
+                        leading-5
+                        text-slate-500
+                        dark:text-slate-400
+                      "
+                    >
+                      {content.body}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onReadContent(
+                        content,
+                      )
+                    }
+                    className="
+                      inline-flex
+                      shrink-0
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      bg-indigo-600
+                      px-4
+                      py-2.5
+                      text-sm
+                      font-semibold
+                      text-white
+                      hover:bg-indigo-700
+                    "
+                  >
+                    <BookOpen
+                      size={16}
+                    />
+
+                    Lire
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div
