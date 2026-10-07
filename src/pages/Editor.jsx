@@ -40,6 +40,9 @@ import {
   createPublication,
 } from '../api/publications';
 
+import MediaSection
+  from '../components/MediaSection';
+
 function getErrorMessage(
   error,
 ) {
@@ -106,22 +109,34 @@ export default function Editor() {
       parsedEditContentId <= 0
     );
 
-  const [title, setTitle] =
-    useState('');
+  const [
+    title,
+    setTitle,
+  ] = useState('');
 
-  const [body, setBody] =
-    useState('');
+  const [
+    body,
+    setBody,
+  ] = useState('');
 
-  const [topic, setTopic] =
-    useState('');
+  const [
+    topic,
+    setTopic,
+  ] = useState('');
 
-  const [tone, setTone] =
-    useState(
-      'professionnel',
-    );
+  const [
+    tone,
+    setTone,
+  ] = useState(
+    'professionnel',
+  );
 
-  const [language, setLanguage] =
-    useState('français');
+  const [
+    language,
+    setLanguage,
+  ] = useState(
+    'français',
+  );
 
   const [
     instruction,
@@ -360,6 +375,7 @@ export default function Editor() {
         setError(
           'Un contenu archivé ne peut pas être modifié.',
         );
+
         return;
       }
 
@@ -430,6 +446,7 @@ export default function Editor() {
         setError(
           'Un contenu archivé ne peut pas être modifié.',
         );
+
         return;
       }
 
@@ -509,6 +526,7 @@ export default function Editor() {
         setError(
           'Un contenu archivé ne peut pas être modifié.',
         );
+
         return null;
       }
 
@@ -588,6 +606,7 @@ export default function Editor() {
         setError(
           'Un contenu archivé ne peut pas être validé.',
         );
+
         return;
       }
 
@@ -598,6 +617,7 @@ export default function Editor() {
         setError(
           'Le titre et le contenu sont obligatoires.',
         );
+
         return;
       }
 
@@ -708,6 +728,7 @@ export default function Editor() {
         setError(
           'Un contenu archivé ne peut pas être publié.',
         );
+
         return;
       }
 
@@ -860,8 +881,8 @@ export default function Editor() {
   return (
     <div
       className="
-        max-w-6xl
         mx-auto
+        max-w-6xl
         space-y-6
       "
     >
@@ -1168,6 +1189,31 @@ export default function Editor() {
               "
             />
           </div>
+
+          <MediaSection
+            contentId={contentId}
+            isArchived={isArchived}
+            ensureContentSaved={
+              async () => {
+                const saved =
+                  await saveDraft();
+
+                return (
+                  saved?.id ||
+                  null
+                );
+              }
+            }
+            onContentInvalidated={
+              () => {
+                if (contentId) {
+                  setContentStatus(
+                    'DRAFT',
+                  );
+                }
+              }
+            }
+          />
 
           <div
             className="
